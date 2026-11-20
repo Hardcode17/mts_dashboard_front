@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from '@gravity-ui/uikit'
 import '@gravity-ui/uikit/styles/fonts.css'
 import '@gravity-ui/uikit/styles/styles.css'
+import './theme/mts-theme.css'
 import './index.css'
 import App from './App.tsx'
 
