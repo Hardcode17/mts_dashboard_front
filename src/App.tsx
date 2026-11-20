@@ -12,6 +12,21 @@ function App() {
       <Button view="action" size="l" onClick={() => setCount(count + 1)}>
         Счётчик: {count}
       </Button>
+      <a
+        className="rickroll"
+        href="https://www.youtube.com/watch?v=dQw4w9WgXc"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Смотреть Rick Astley — Never Gonna Give You Up"
+      >
+        <img
+          src="https://i.ytimg.com/vi/dQw4w9WgXc/hqdefault.jpg"
+          alt="Рик Эстли в клипе Never Gonna Give You Up"
+          width="480"
+          height="360"
+        />
+        <Text as="span" variant="body-2">You've been rickrolled! 🕺</Text>
+      </a>
     </main>
   )
 }

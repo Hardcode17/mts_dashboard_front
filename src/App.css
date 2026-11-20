@@ -4,3 +4,31 @@
   margin: 0 auto;
   padding: 48px 24px;
 }
+
+.rickroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 32px;
+  color: var(--g-color-text-link);
+  text-decoration: none;
+}
+
+.rickroll img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 16px;
+}
+
+.rickroll:hover {
+  text-decoration: underline;
+}
+
+.rickroll:focus-visible {
+  outline: 2px solid var(--g-color-text-link);
+  outline-offset: 6px;
+  border-radius: 16px;
+}
