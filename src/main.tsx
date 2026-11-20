@@ -1,16 +1,11 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { ThemeProvider } from '@gravity-ui/uikit'
-import '@gravity-ui/uikit/styles/fonts.css'
+import {StrictMode} from 'react'
+import {createRoot} from 'react-dom/client'
+import {configure} from '@gravity-ui/uikit'
 import '@gravity-ui/uikit/styles/styles.css'
 import './theme/mts-theme.css'
 import './index.css'
-import App from './App.tsx'
+import DashboardRoot from './DashboardRoot'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ThemeProvider theme="light">
-      <App />
-    </ThemeProvider>
-  </StrictMode>,
-)
+configure({lang: 'ru'})
+
+createRoot(document.getElementById('root')!).render(<StrictMode><DashboardRoot /></StrictMode>)
