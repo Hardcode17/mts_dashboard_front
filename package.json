@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test": "node --test tests/*.test.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -11,6 +12,8 @@
     "start": "serve -s dist -l tcp://0.0.0.0:3000"
   },
   "dependencies": {
+    "@gravity-ui/charts": "^2.1.0",
+    "@gravity-ui/table": "^2.0.0",
     "@gravity-ui/uikit": "^8.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
