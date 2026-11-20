@@ -45,3 +45,31 @@ docker compose down
 ```
 
 После изменения исходников снова выполните `docker compose up -d --build`.
+
+## Автодеплой GitHub Actions
+
+Workflow `.github/workflows/deploy.yml` запускается после push в `main`
+или вручную через Actions → Deploy frontend → Run workflow (ветка `main`).
+Используется runner организации Hardcode17 с метками `self-hosted`, `Linux`,
+`ARM64`, `pi-web` (настроенный `raspberrypi-front`).
+
+На runner должны быть запущены Docker Engine и установлен Docker Compose v2
+с поддержкой `up --wait`. Пользователь службы runner должен иметь доступ к Docker
+без `sudo`. В настройках группы runner разрешите доступ репозиторию
+`Hardcode17/mts_dashboard_front`.
+
+Workflow собирает образ непосредственно на ARM64 runner, проверяет линтер и
+TypeScript, заменяет контейнер и ждёт успешного healthcheck. До успешной сборки
+работающий контейнер не останавливается. Одновременные деплои выполняются по очереди.
+
+Адрес после деплоя: `http://<IP Raspberry Pi>:8080`.
+Для другого порта задайте переменную репозитория `FRONTEND_PORT` в
+Settings → Secrets and variables → Actions → Variables. Порт должен быть доступен
+в сетевых настройках сервера. SSH и registry secrets для этого способа не нужны.
+
+Для ручного управления контейнером на runner используйте тот же Compose project:
+
+```sh
+docker compose -p mts-dashboard-front ps
+docker compose -p mts-dashboard-front logs -f frontend
+```

@@ -1,0 +1,51 @@
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, ARM64, pi-web]
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: mts-dashboard-front
+      FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8080' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check Docker
+        run: |
+          docker info
+          docker compose version
+          docker compose config --quiet
+
+      - name: Build and validate frontend
+        run: docker compose build --pull frontend
+
+      - name: Deploy and wait for healthcheck
+        run: docker compose up -d --no-build --wait --wait-timeout 120 frontend
+
+      - name: Show deployment status
+        run: docker compose ps
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --tail 100 frontend
