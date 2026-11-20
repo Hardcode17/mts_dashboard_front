@@ -1,0 +1,140 @@
+# MTS Dashboard Frontend
+
+Дашборд на React + TypeScript + Vite с дизайн-системой Gravity UI и брендовой темой МТС.
+
+## Стек
+
+- React 19, TypeScript 7, Vite 8
+- `@gravity-ui/uikit` 8 — база компонентов и токенов
+- oxlint — линтер, `tsc -b` — проверка типов
+- Прод: статика `dist/` через `serve` в Docker
+
+## Команды
+
+```sh
+npm run dev      # Vite, http://localhost:5173
+npm run lint     # oxlint
+npm run build    # tsc -b && vite build
+npm run preview  # предпросмотр сборки
+```
+
+Перед завершением любой задачи с кодом запускай `npm run lint` и `npm run build`.
+
+## Gravity UI
+
+Этот проект использует дизайн-систему Gravity UI (`@gravity-ui/*`).
+
+**Перед написанием или изменением кода компонентов Gravity UI обязательно загрузи скил `gravity-ui`** — он подскажет правильный пакет и не даст выдумать props или имена иконок. Загружай его на любую UI-задачу.
+
+Дополнительно:
+
+- Источник истины — **установленная** версия пакета из `package.json` и `node_modules`, а не память. Версии мажоров не повышай без явной просьбы.
+- Документация: локально `node_modules/@gravity-ui/<pkg>/build/docs/INDEX.md`, онлайн — `https://gravity-ui.com/llms/<pkg>/<major>/llms.txt`. Каталог всех пакетов: `https://gravity-ui.com/llms.txt`.
+- Не подменяй компоненты Gravity UI на MUI, Ant Design или голые `<input>`/`<button>`.
+- Не выдумывай API: `Button` использует `view`, а не `variant`; `Icon` принимает `data={SomeIcon}`, а не строку; вариантов `header-3` не существует.
+- Цвета и отступы — только через семантические токены `--g-*` и шкалу `--g-spacing-*`, без хардкода hex и пикселей.
+
+## Тема и ассеты
+
+- `src/theme/` — рабочая тема: `mts-theme.css` (сборка v2 под UIKit 7+/8), `fonts.css`, `mts-navigation.css`, `fonts/`. Подключается в `src/main.tsx` после стилей UIKit.
+- В проекте используется **только одна** CSS-тема. Не подключай одновременно `mts-theme.css` и `mts-theme-v2.css`.
+- `docs/design/mts-gravity/` — исходный пакет дизайна, Themer-JSON, предпросмотр и скриншоты. В сборку не попадает, линтером игнорируется.
+- `src/assets/` — ассеты, импортируемые кодом (Vite хеширует имена).
+- `public/` — только файлы с фиксированным публичным URL: `favicon.svg`, `robots.txt`, OG-изображения.
+- Шрифты и логотипы не клади в `public/`, если на них ссылается CSS или компонент: используй `src/assets/`, чтобы работало кеширование по хешу.
+
+## Структура
+
+```text
+src/
+  assets/        # импортируемые изображения и логотипы
+  theme/         # брендовая тема и шрифты
+  App.tsx
+  main.tsx
+docs/design/     # референсы дизайна, не для продакшена
+public/          # статика с постоянными URL
+```
+
+## Jira
+
+Работа с задачами — по общей инструкции: [`docs/agents/jira.md`](docs/agents/jira.md).
+
+- Проект: `KAN`, доска общая для frontend, backend и data.
+- В этом репозитории используй метку `repo:frontend`.
+- Перед созданием задачи ищи существующую; не бери задачи с метками `repo:backend` и `repo:data`.
+
+## Git: ветки и коммиты
+
+`main` — продакшен, деплой запускается push-ом в `main`. Напрямую в `main` не коммить.
+`dev` — интеграционная ветка, сюда сливается работа.
+
+### Ветки
+
+Создавай ветку от актуального `dev`:
+
+```text
+feature/<short-name>   # новая функциональность
+fix/<short-name>       # исправление бага
+refactor/<short-name>  # переработка без изменения поведения
+docs/<short-name>      # документация
+chore/<short-name>     # зависимости, конфиги, инфраструктура
+```
+
+- Имя — английское, kebab-case, 2–5 слов: `feature/dashboard-sidebar`, `fix/theme-font-paths`.
+- Одна ветка — одна задача. Не смешивай рефакторинг и фичу.
+- Перед PR подтяни `dev` и реши конфликты у себя, а не в `main`.
+
+### Коммиты — Conventional Commits
+
+```text
+<type>(<scope>): <summary>
+
+[optional body]
+
+[optional footer]
+```
+
+| Type | Когда |
+|---|---|
+| `feat` | новая функциональность |
+| `fix` | исправление бага |
+| `refactor` | изменение кода без изменения поведения |
+| `style` | форматирование, пробелы, без логики |
+| `docs` | документация |
+| `test` | тесты |
+| `build` | сборка, зависимости, Docker |
+| `ci` | GitHub Actions и прочий CI |
+| `perf` | производительность |
+| `chore` | прочее обслуживание |
+
+Правила:
+
+- `summary` — английский, императив, строчная буква, без точки в конце, до 72 символов.
+- `scope` — по возможности: `theme`, `assets`, `ui`, `dashboard`, `deploy`, `deps`.
+- В теле объясняй **почему**, а не пересказывай diff. Строки до 72 символов.
+- Один коммит — одно логическое изменение. Не оставляй `wip`, `fixup`, `tmp` в `dev` и `main`.
+- Ссылки на задачи — в футере: `Refs: #123` или `Closes: #123`.
+- Не коммить `dist/`, `node_modules/`, `.env*`, секреты и локальные файлы IDE.
+
+Примеры:
+
+```text
+feat(theme): add MTS brand theme for uikit 8
+
+fix(assets): keep font paths relative to the theme css
+
+docs(agents): describe branch and commit conventions
+
+chore(deps): bump @gravity-ui/uikit to 8.1.0
+```
+
+### Что делает агент
+
+1. Перед работой проверь текущую ветку и создай рабочую от `dev`, если её ещё нет.
+2. Не коммить и не пушить без явной просьбы; если просят — сначала покажи предлагаемое сообщение.
+3. Перед коммитом запусти `npm run lint` и `npm run build`.
+4. Не переписывай чужие коммиты и не делай force-push в `dev` и `main`.
+
+## Язык
+
+Интерфейс и документация — на русском. Код, имена переменных, файлов и коммитов — на английском.

@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "skills": {
+    "feature-arch": {
+      "source": "PyModel/react-frontend-skills",
+      "commit": "85f6b473fa54e3df9276b1aa52470e2cecf86931",
+      "sourceType": "github",
+      "skillPath": "skills/feature-arch/SKILL.md",
+      "computedHash": "6ed5c4b692b628d9d11298b5dabc69b6d957a2e702d1dac7b3cec7f608241f66",
+      "installMode": "copy"
+    },
+    "gravity-ui": {
+      "source": "gravity-ui/skills",
+      "commit": "8df02e7a55e6e0441cbd758ca2b0c48541cb8f9c",
+      "sourceType": "github",
+      "skillPath": "skills/gravity-ui/SKILL.md",
+      "computedHash": "863b2889a97ab72b11db2df20da2ec215b0655bdbc72bba523d7d945fa5cdf82",
+      "installMode": "copy"
+    },
+    "typescript": {
+      "source": "PyModel/react-frontend-skills",
+      "commit": "85f6b473fa54e3df9276b1aa52470e2cecf86931",
+      "sourceType": "github",
+      "skillPath": "skills/typescript/SKILL.md",
+      "computedHash": "62842665b2aad317ff1387080aaebddba22b4e0b49bfe4f55adf60325c1688db",
+      "installMode": "copy"
+    },
+    "ui-design": {
+      "source": "PyModel/react-frontend-skills",
+      "commit": "85f6b473fa54e3df9276b1aa52470e2cecf86931",
+      "sourceType": "github",
+      "skillPath": "skills/ui-design/SKILL.md",
+      "computedHash": "143fbe4d8ff7e11b81dc0e32bdc20c67118c3ace111a94a162a5efcdb733f13a",
+      "installMode": "copy"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "commit": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "7991ed4fbecdac23f47c1a40c243e00a212a9e7f3604db93959b3ae11dffe299",
+      "installMode": "copy"
+    }
+  }
+}

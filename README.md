@@ -3,6 +3,20 @@
 React + TypeScript + Vite с [Gravity UI](https://gravity-ui.com/libraries/uikit).
 Подключены стили, шрифты и `ThemeProvider`, на стартовой странице — компоненты `Text` и `Button`.
 
+## Дизайн-система
+
+- `src/theme/` — рабочая тема приложения: `mts-theme.css`, `fonts.css`,
+  `mts-navigation.css` и шрифты `fonts/`. Подключается в `src/main.tsx` после
+  стилей UIKit.
+- `docs/design/mts-gravity/` — исходный пакет дизайна: `styles.json` и
+  `styles-v2.json` для Themer, обе версии CSS-темы, шрифты, автономный
+  предпросмотр `preview/index.html` и скриншоты. В сборку не попадает.
+
+Проект использует `@gravity-ui/uikit` 8, поэтому в `src/theme/` взята
+`mts-theme-v2.css` (структура токенов UIKit 7+). Вариант `mts-theme.css` для
+UIKit 6 хранится в `docs/design/mts-gravity/` как справочный. Не подключайте обе
+темы одновременно.
+
 ## Локальная разработка
 
 Требуется Node.js 24 LTS и npm.

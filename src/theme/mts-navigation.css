@@ -1,0 +1,4 @@
+.g-root_theme_dark .gn-aside-header.gn-aside-header,
+.gravity-ui-landing-themes-preview-layout_theme_dark .gn-aside-header.gn-aside-header {
+    --gn-aside-header-item-current-icon-color: var(--g-color-text-brand-contrast, #fff);
+}
