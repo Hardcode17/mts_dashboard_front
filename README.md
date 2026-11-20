@@ -73,3 +73,4 @@ Settings → Secrets and variables → Actions → Variables. Порт долж�
 docker compose -p mts-dashboard-front ps
 docker compose -p mts-dashboard-front logs -f frontend
 ```
+asd
