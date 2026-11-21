@@ -45,7 +45,16 @@
     "eliminationType": null,
     "eliminationTypeId": null,
     "receivingChannel": "Анонимное письмо",
-    "solution": "Отрегулирован Объектив, инцидент закрыт."
+    "solution": "Отрегулирован Объектив, инцидент закрыт.",
+    "deadlineRisk": {
+      "risk": "high",
+      "evaluatedAt": "2026-11-22T09:42:00Z",
+      "reasons": [
+        {"code": "group_median_exceeds", "text": "Медиана группы решения 6.0 ч, до дедлайна 2.1 ч"},
+        {"code": "deadline_extended", "text": "Дедлайн уже продлевался 1 раз"}
+      ],
+      "score": 0.83
+    }
   },
   {
     "sysId": "179414707702804217",
@@ -93,7 +102,15 @@
     "eliminationType": null,
     "eliminationTypeId": null,
     "receivingChannel": "Анонимное письмо",
-    "solution": "Проведена диагностика, Клапан исправлен."
+    "solution": "Проведена диагностика, Клапан исправлен.",
+    "deadlineRisk": {
+      "risk": "low",
+      "evaluatedAt": "2026-11-22T09:42:00Z",
+      "reasons": [
+        {"code": "group_median_exceeds", "text": "Медиана группы решения 0.5 ч, до дедлайна 4.4 ч"}
+      ],
+      "score": 0.11
+    }
   },
   {
     "sysId": "179420418505242429",

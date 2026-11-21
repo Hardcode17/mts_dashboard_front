@@ -5,6 +5,7 @@ import {
 } from '@gravity-ui/uikit'
 import type {Incident} from './demoData'
 import {AgentInvestigation} from './AgentInvestigation'
+import {DeadlineRiskPanel} from './DeadlineRiskPanel'
 import {Collaboration,Meeting} from './desk/CardWork'
 import {OfficialAssignment} from './desk/OfficialAssignment'
 import {useWorkspace} from './desk/context'
@@ -37,6 +38,7 @@ function Assignment({incident}: {incident: Incident}) {
         <Text variant="display-2">{due===null?'Не указан':fullTime(due)+' МСК'}</Text>
         {due!==null&&!incident.restoredAt&&<Text color="secondary">{due<standNow(desk,now)?'Просрочен на ':'До срока: '}{Math.abs(Math.ceil((due-standNow(desk,now))/60000))} мин</Text>}
       </Flex>
+      <DeadlineRiskPanel incident={incident}/>
       <DefinitionList direction="vertical">
         <DefinitionList.Item name="Продукт / сервис">{incident.product} · {incident.service||incident.title}</DefinitionList.Item>
         <DefinitionList.Item name="Тип">{incident.serviceType||(incident.key==='incident'?'Клиентский':'Нет данных')}</DefinitionList.Item>

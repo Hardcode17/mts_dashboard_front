@@ -26,6 +26,11 @@
 .agent-checks li + li { border-top: 1px solid var(--mcc-hairline); }
 .agent-checks li::marker { color: var(--g-color-text-secondary); }
 .agent-checks li > p { margin-block: var(--g-spacing-1) var(--g-spacing-2); }
+.deadline-risk { min-width: 0; }
+.deadline-risk-reason-list { margin: 0; padding-inline-start: var(--g-spacing-5); }
+.deadline-risk-reason-list li { padding-block: var(--g-spacing-1) var(--g-spacing-2); }
+.deadline-risk-reason-list li + li { border-top: 1px solid var(--mcc-hairline); }
+.deadline-risk-reason-list li::marker { color: var(--g-color-text-secondary); }
 .agent-record { overflow-wrap: anywhere; padding-block: var(--g-spacing-2); }
 .incident-tabs { max-width: 100%; overflow-x: auto; }
 .history-list { margin: 0; font-variant-numeric: tabular-nums; }
