@@ -12,9 +12,9 @@ RUN apk add --no-cache chromium
 ENV CHROMIUM_PATH=/usr/bin/chromium
 WORKDIR /check
 COPY --from=build /app/node_modules/playwright-core ./node_modules/playwright-core
-COPY tests/agent-form-smoke.mjs .
+COPY tests/stand-login-smoke.mjs .
 USER node
-CMD ["node", "agent-form-smoke.mjs"]
+CMD ["node", "stand-login-smoke.mjs"]
 
 FROM node:24-alpine AS production
 WORKDIR /app

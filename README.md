@@ -115,6 +115,17 @@ curl -fsS http://localhost:3000/health
 
 Docker-образ собирает статику в API-режиме и запускает `server/start.mjs` от пользователя `node`. Compose публикует приложение на `FRONTEND_PORT` и передаёт backend-адрес в контейнер.
 
+На Raspberry Pi workflow **Deploy frontend** использует `compose.pi.yaml` и
+подключает frontend к сети проекта `mts-dashboard-backend`. Сначала запустите
+backend, чтобы Compose создал сеть и поднял Keycloak. Funnel направляет запросы
+на frontend. Frontend передаёт публичные запросы realm `dashboard` и его ресурсов
+из `/auth/` в Keycloak, а `/auth/callback` обслуживает само приложение.
+
+В Actions Variables фронтенда укажите `FRONTEND_OIDC_AUTHORITY` как
+`https://<публичный-хост>/auth/realms/dashboard`. Это значение должно совпадать
+с `STAND_KEYCLOAK_URL` бэкенда с добавленным суффиксом `/realms/dashboard`.
+`FRONTEND_BACKEND_URL` по умолчанию использует `http://backend:8080` в сети Docker.
+
 ```sh
 BACKEND_URL=https://backend.example.test \
 OIDC_AUTHORITY=https://auth.example.test/realms/dashboard \
