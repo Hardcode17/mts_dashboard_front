@@ -3,9 +3,10 @@ import type {Incident} from '../demoData'
 import {useWorkspace, useRelated} from './context'
 import {active, fullTime, dueInstant, priorityNames} from './types'
 import {itsmLink} from './itsmLink'
+
 export function QuickCard({item, back}: {item: Incident; back: string}) {
   const related = useRelated(item)
-  const {desk, act, busy} = useWorkspace(),
+  const {desk, mode, act, busy} = useWorkspace(),
     due = dueInstant(item)
   return (
     <Drawer
@@ -50,28 +51,39 @@ export function QuickCard({item, back}: {item: Incident; back: string}) {
             </div>
           ))}
         </dl>
-        <Button view="action" href={'#incident/' + item.key}>
+        <Button
+          view="action"
+          href={
+            mode === 'api'
+              ? '/incidents/' + encodeURIComponent(item.id)
+              : '#incident/' + item.key
+          }
+        >
           Полная карточка
         </Button>
-        <Button
-          disabled={busy}
-          onClick={async () => {
-            await act({type: 'analyze', key: item.key})
-            location.hash = 'investigation/' + item.key
-          }}
-        >
-          Разобрать причину агентом
-        </Button>
-        <Link href={'#incident/' + item.key + '?tab=history'}>История изменений</Link>
-        <Link {...itsmLink(item.id, item.key, import.meta.env.VITE_ITSC_URL)}>Открыть в ITSM</Link>
-        {related.length > 0 && (
-          <Link href={'#incident/' + item.key + '?tab=work'}>
-            Похожие случаи: {related.length} · проверить связь →
-          </Link>
+        {mode !== 'api' && (
+          <>
+            <Button
+              disabled={busy}
+              onClick={async () => {
+                await act({type: 'analyze', key: item.key})
+                location.hash = 'investigation/' + item.key
+              }}
+            >
+              Разобрать причину агентом
+            </Button>
+            <Link href={'#incident/' + item.key + '?tab=history'}>История изменений</Link>
+            <Link {...itsmLink(item.id, item.key, import.meta.env.VITE_ITSC_URL)}>Открыть в ITSM</Link>
+            {related.length > 0 && (
+              <Link href={'#incident/' + item.key + '?tab=work'}>
+                Похожие случаи: {related.length} · проверить связь →
+              </Link>
+            )}
+            {desk.work[item.key]?.links.length ? (
+              <Text>Подтверждённых связей: {desk.work[item.key].links.length}</Text>
+            ) : null}
+          </>
         )}
-        {desk.work[item.key]?.links.length ? (
-          <Text>Подтверждённых связей: {desk.work[item.key].links.length}</Text>
-        ) : null}
       </section>
     </Drawer>
   )

@@ -112,6 +112,121 @@ export function mockService(
   }
   async function handle(req: IncomingMessage, res: ServerResponse, next: () => void) {
     const url = new URL(req.url ?? '/', 'http://stand.local')
+    const apiDesk = () => desks.get('case')!
+    const stateEnum = (item: Desk['records'][string]) => {
+      if (item.research) return 'Research'
+      if (item.state === 'Завершён' || item.state === 'Завершен') return 'Resolved'
+      if (item.state === 'Закрыт') return 'Closed'
+      if (item.state === 'Выполняется' || item.state === 'В работе') return 'WorkInProgress'
+      return 'Assigned'
+    }
+    const apiGroups = (item: Desk['records'][string]) => {
+      const state = stateEnum(item)
+      const active = state === 'Assigned' || state === 'WorkInProgress'
+      const groups: string[] = []
+      if (active && item.priority === 4) groups.push('critical')
+      if ((active || state === 'Research') && item.team === 'КЦ ИТ Координаторы Массовых Инцидентов') {
+        groups.push('coordinators')
+      }
+      if (active && item.priority === 3) groups.push('high')
+      if (state === 'Research') groups.push('research')
+      return groups
+    }
+    const apiIncident = (item: Desk['records'][string], now: number) => {
+      const deadline = item.dueAt ?? null
+      const isActive = ['Assigned', 'WorkInProgress'].includes(stateEnum(item))
+      return {
+        id: item.id,
+        header: item.title,
+        description: item.description ?? null,
+        productName: item.product || null,
+        service: item.service || null,
+        submitDate: new Date(item.registeredAt ?? now).toISOString(),
+        updatedAt: new Date(item.updatedAt ?? item.registeredAt ?? now).toISOString(),
+        stateEnum: stateEnum(item),
+        priorityId: item.priority,
+        assignedGroupName: item.team || null,
+        assignedEmployee: item.assignee ?? null,
+        deadline: deadline === null ? null : new Date(deadline).toISOString(),
+        remainingSeconds:
+          isActive && deadline !== null
+            ? Math.floor((deadline - now) / 1000)
+            : null,
+        overdue: isActive && deadline !== null && now > deadline,
+        groups: apiGroups(item),
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/incidents') {
+      const d = apiDesk()
+      const now = Date.now()
+      const rows = Object.values(d.records).filter((item) => !item.absent)
+      const filtered = rows.filter((item) => {
+        const state = stateEnum(item)
+        const q = url.searchParams.get('q')?.trim().toLocaleLowerCase('ru-RU')
+        const deadline = item.dueAt ?? null
+        const isActive = state === 'Assigned' || state === 'WorkInProgress'
+        const deadlineState = deadline === null
+          ? 'unspecified'
+          : !isActive
+            ? 'inactive'
+            : now > deadline
+              ? 'overdue'
+              : 'withinDeadline'
+        return (
+          (!q || [item.id, item.title, item.description].join(' ').toLocaleLowerCase('ru-RU').includes(q)) &&
+          (!url.searchParams.has('assignedGroupName') || item.team === url.searchParams.get('assignedGroupName')) &&
+          (!url.searchParams.has('productName') || item.product === url.searchParams.get('productName')) &&
+          (!url.searchParams.has('stateEnum') || state === url.searchParams.get('stateEnum')) &&
+          (!url.searchParams.has('priorityId') || item.priority === Number(url.searchParams.get('priorityId'))) &&
+          (!url.searchParams.has('deadlineState') || deadlineState === url.searchParams.get('deadlineState'))
+        )
+      })
+      const counts = {critical: 0, coordinators: 0, high: 0, research: 0}
+      for (const item of filtered) {
+        for (const group of apiGroups(item)) counts[group as keyof typeof counts] += 1
+      }
+      const group = url.searchParams.get('group')
+      const items = filtered
+        .filter((item) => !group || apiGroups(item).includes(group))
+        .map((item) => apiIncident(item, now))
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || a.id.localeCompare(b.id))
+      return send(res, 200, {
+        revision: d.version,
+        eventSeq: d.seq,
+        counts,
+        items,
+      })
+    }
+    if (req.method === 'GET' && url.pathname === '/api/snapshot/status') {
+      const d = apiDesk()
+      const lastSuccessAt = d.lastImport ? new Date(d.lastImport).toISOString() : null
+      const lastReceivedAt = lastChecked
+        ? new Date(lastChecked).toISOString()
+        : lastSuccessAt
+      return send(res, 200, {
+        lastReceivedAt,
+        lastSuccessAt,
+        revision: lastSuccessAt ? d.version : null,
+        stale: Boolean(d.sourceError || !lastSuccessAt),
+      })
+    }
+    const incidentPath = url.pathname.match(/^\/api\/incidents\/([^/]+)$/)
+    if (req.method === 'GET' && incidentPath) {
+      const number = decodeURIComponent(incidentPath[1])
+      const item = Object.values(apiDesk().records).find(
+        (record) => record.id === number && !record.absent,
+      )
+      if (!item) return send(res, 404, {code: 'RESOURCE_NOT_FOUND', message: `Resource with id ${number} not found`})
+      return send(res, 200, {
+        revision: apiDesk().version,
+        incident: apiIncident(item, Date.now()),
+        itsmUrl: `https://itsm.example.org/incidents/${encodeURIComponent(item.id)}`,
+        itsmDemo: true,
+        meetingUrl: null,
+      })
+    }
+
     if (!url.pathname.startsWith('/api/stand/')) return next()
     const mode = url.searchParams.get('mode') ?? 'volume'
     if (mode !== 'case' && mode !== 'volume') return send(res, 400, {error: 'Неизвестный источник'})

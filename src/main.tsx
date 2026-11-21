@@ -9,9 +9,9 @@ import DashboardRoot from './DashboardRoot'
 configure({lang: 'ru'})
 const cardPath=window.location.pathname.match(/^\/incidents\/([^/]+)\/?$/)
 const params=new URLSearchParams(window.location.search)
-if(cardPath){
-  const source=params.get('source')
-  if(source==='case'||source==='volume')localStorage.setItem('mcc-source',source)
+const source=params.get('source')
+if(cardPath&&(source==='case'||source==='volume')){
+  localStorage.setItem('mcc-source',source)
   window.history.replaceState(null,'','/#incident/'+cardPath[1])
 }
 if(!window.location.hash&&params.has('group')){

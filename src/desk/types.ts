@@ -137,6 +137,12 @@ export interface Desk {
   lastImport: number
   lastChanges: {id: string; fields: string[]}[]
   demoCount: number
+  apiCounts?: {
+    critical: number
+    coordinators: number
+    high: number
+    research: number
+  }
 }
 export type Command = {
   type:

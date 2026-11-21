@@ -1,16 +1,18 @@
 import {Moon, Sun} from '@gravity-ui/icons'
 import {lazy, Suspense, useEffect, useMemo, useRef, useState} from 'react'
 import {Button, Card, Dialog, Flex, Icon, Label, Link, Loader, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
-import {initialEvents, initialIncidents} from './demoData'
+import {initialEvents} from './demoData'
 import {correlationIndex,similarIncidents} from './desk/correlation'
 import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
 import {useDesk} from './desk/useDesk'
+import {workspaceIncidents} from './desk/records'
 import {QuickCard} from './desk/QuickCard'
 import {ShiftDesk} from './desk/ShiftDesk'
 import {OfficialCard,Meeting} from './desk/CardWork'
 import {fullTime,standNow,moscowTime} from './desk/types'
 import './desk/desk.css'
 import {Overview} from './Overview'
+import {IncidentApiRoute} from './features/incidents/ui/IncidentApiRoute'
 import mtsSymbol from './assets/mts-symbol.svg'
 import './App.css'
 
@@ -59,13 +61,30 @@ function useDashboardLocation(mode: string) {
 
 type ThemeProps = {theme:'light'|'dark';changeTheme:(value:'light'|'dark')=>void}
 export default function App(props:ThemeProps){
+  const [pathname, setPathname] = useState(() => window.location.pathname)
+  useEffect(() => {
+    const updatePath = () => setPathname(window.location.pathname)
+    window.addEventListener('popstate', updatePath)
+    return () => window.removeEventListener('popstate', updatePath)
+  }, [])
+
+  const match = pathname.match(/^\/incidents\/([^/]+)\/?$/)
+  if (match) {
+    return <IncidentApiRoute key={match[1]} number={decodeURIComponent(match[1])} />
+  }
+
+  return <DeskApplication {...props} />
+}
+
+function DeskApplication(props:ThemeProps){
   const client=useDesk()
   if(!client.desk)return <main className="workspace"><Card className="mcc-glass incident-panel"><Text as="h1" variant="header-2">Рабочее место MCC</Text>
-    {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button></>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
+    {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button>
+      {client.mode === 'api' && <Button onClick={() => client.source('volume')}>Большая смена</Button>}</>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
   return <DeskContext.Provider value={{...client,desk:client.desk}}><Workspace key={client.mode} {...props}/></DeskContext.Provider>
 }
 function Workspace({theme,changeTheme}:ThemeProps){
-  const {desk,person,checked,now,error,actionError,clearError,refresh,act,busy}=useWorkspace()
+  const {desk,person,checked,now,error,actionError,clearError,refresh,act,busy,mode}=useWorkspace()
   const [displayed,setDisplayed]=useState<string[]>([])
   const route = useDashboardLocation(desk.mode)
   const {hash, listing} = route
@@ -79,13 +98,9 @@ function Workspace({theme,changeTheme}:ThemeProps){
   const queue = listPath.split('/')[1]
   const activeQueue = listPath === 'events' ? 'events' :
     queue === 'assigned' || queue === 'high' || queue === 'research' || queue === 'all' ? queue : 'critical'
-  const incidents=useMemo(()=>{
-    if(desk.mode==='case')return Object.values(desk.records)
-    const ids=new Set(initialIncidents.map(i=>i.key))
-    return [...initialIncidents.map(i=>desk.records[i.key]??i),...Object.values(desk.records).filter(i=>!ids.has(i.key))]
-  },[desk.records,desk.mode])
+  const incidents = useMemo(() => workspaceIncidents(desk.records, desk.mode), [desk.records, desk.mode])
   const index=useMemo(()=>correlationIndex(incidents),[incidents])
-  const events=useMemo(()=>desk.mode==='case'?desk.events:[...desk.events,...initialEvents],[desk.events,desk.mode])
+  const events=useMemo(()=>desk.mode==='case' || mode === 'api'?desk.events:[...desk.events,...initialEvents],[desk.events,desk.mode,mode])
   const selected=incidents.find(i=>i.key===key||i.id===key)
   const showDetails=selected&&isCardRoute(hash)
   const query=new URLSearchParams(hash.split('?')[1])
@@ -111,9 +126,9 @@ function Workspace({theme,changeTheme}:ThemeProps){
   },[pending,visible.length,desk.quietUntil])
   const recent=desk.events[0]
   const actor=desk.people.find(p=>p.id===person)??desk.people[0]
-  const myTask=desk.tasks.find(t=>!t.finished&&t.attempts.at(-1)?.person===actor.id&&!t.attempts.at(-1)?.ended&&!t.attempts.at(-1)?.accepted)
+  const myTask=actor&&desk.tasks.find(t=>!t.finished&&t.attempts.at(-1)?.person===actor.id&&!t.attempts.at(-1)?.ended&&!t.attempts.at(-1)?.accepted)
   useEffect(() => {
-    if (view !== 'drawer') window.scrollTo(0, 0)
+    if (view !== 'drawer' && view !== 'queue') window.scrollTo(0, 0)
   }, [view, key])
   useEffect(() => {
     document.title = (showDetails ? selected.title : isDesk ? 'Моя смена' : listTitle) + ' · MCC'
@@ -135,7 +150,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
           <nav className="primary-nav" aria-label="Разделы дашборда">
             <Link href="#overview" aria-current={summary && !showDetails ? 'page' : undefined}>Сводка</Link>
             <Link href="#queue/critical" aria-current={listPath.startsWith('queue/') && !showDetails ? 'page' : undefined}>Очереди</Link>
-            <Link href="#desk/tasks" aria-current={isDesk?'page':undefined}
+            <Link href={mode === 'api' ? '#desk/source' : '#desk/tasks'} aria-current={isDesk?'page':undefined}
               aria-label={myTask?'Моя смена — одна задача ожидает принятия':undefined}
               title={myTask?'Одна задача ожидает принятия':undefined}>Моя смена{myTask&&<span className="nav-task-count" aria-hidden="true">1</span>}</Link>
             <Link href="#events" aria-current={listPath === 'events' && !showDetails ? 'page' : undefined}>Журнал</Link>
@@ -152,7 +167,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
       <main className={'workspace' + (isDesk?' workspace-shift':'') + (wall && !showDetails ? ' wall' : '')}>
         <div className="source-status" aria-label="Состояние данных" role="group">
           <span className="source-indicator" data-stale={Boolean(error||desk.sourceError)} aria-hidden="true" />
-          <Text variant="body-1">{desk.mode==='case'?'Снимок ITSM':'Данные демосмены'}</Text>
+          <Text variant="body-1">{mode === 'api' ? 'API рабочего места MCC' : desk.mode==='case'?'Снимок ITSM':'Данные демосмены'}</Text>
           <Text color="secondary" variant="body-1">{checked
             ? <>Последняя проверка <time dateTime={new Date(checked).toISOString()} title={fullTime(checked)+' МСК'}>{moscowTime(checked)} МСК</time></>
             : 'Ожидаем первую проверку'}</Text>
@@ -196,7 +211,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
               <Text as="p" variant="body-2" color="secondary">Карточек в снимке: {incidents.length.toLocaleString('ru-RU')} · Событий: {events.length.toLocaleString('ru-RU')}</Text>
             </div>
             <Flex gap="spacing-2" wrap="wrap">
-              <Button size="l" view="outlined" disabled={busy} onClick={() => void act({type:'demo'})}>Демо: новый крит</Button>
+              {mode !== 'api' && <Button size="l" view="outlined" disabled={busy} onClick={() => void act({type:'demo'})}>Демо: новый крит</Button>}
               <Button size="l" view="action" href={wall ? '#queue/critical' : '#wall'}>{wall ? 'Вернуться на рабочее место' : 'На общий экран'}</Button>
             </Flex>
           </div>
