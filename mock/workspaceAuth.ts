@@ -1,4 +1,6 @@
 import type {IncomingMessage, ServerResponse} from 'node:http'
+import {isCoordinatorAvailability} from '../src/entities/coordinator/model/availability.ts'
+import type {CoordinatorProfile} from './coordinatorAvailability.ts'
 
 export function workspaceAuthSettings() {
   return {
@@ -11,7 +13,7 @@ export function workspaceAuthSettings() {
 
 export type WorkspaceAuth = ReturnType<typeof workspaceAuthSettings>
 
-export async function requireWorkspaceUser(req: IncomingMessage, res: ServerResponse, profileUrl: string) {
+export async function requireWorkspaceUser(req: IncomingMessage, res: ServerResponse, profileUrl: string): Promise<CoordinatorProfile | false> {
   const authorization = req.headers.authorization
   let status = 401
   if (authorization && /^Bearer [^\s,]+$/i.test(authorization)) {
@@ -37,6 +39,8 @@ export async function requireWorkspaceUser(req: IncomingMessage, res: ServerResp
               || ('name' in profile && typeof profile.name === 'string' && profile.name)
               || ('username' in profile && typeof profile.username === 'string' && profile.username)
               || profile.subject,
+            availability: 'availability' in profile && isCoordinatorAvailability(profile.availability)
+              ? profile.availability : undefined,
           }
         status = 503
       } else {

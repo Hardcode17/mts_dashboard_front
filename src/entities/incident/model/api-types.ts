@@ -92,12 +92,24 @@ export interface IncidentListResponse {
   items: IncidentDto[]
 }
 
+export type IncidentLinkKind = 'related_to' | 'causes' | 'duplicate_of'
+
+export interface ConfirmedIncidentLink {
+  id: number
+  sourceIncidentId: IncidentNumber
+  targetIncidentId: IncidentNumber
+  kind: IncidentLinkKind
+  confirmedByUserId: number
+  createdAt: string
+}
+
 export interface IncidentDetailResponse {
   revision: number | null
   incident: IncidentDto
   itsmUrl: string
   itsmDemo: boolean
   meetingUrl: string | null
+  confirmedLinks: ConfirmedIncidentLink[]
 }
 
 export interface SimilarIncidentsResponse {

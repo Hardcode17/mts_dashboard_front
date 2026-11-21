@@ -1,9 +1,11 @@
 import {useMemo, useRef, useState} from 'react'
 import {usesRealBackend} from '../shared/api/mode'
+import {NotificationSettings} from '../features/notification-settings/NotificationSettings'
 import {
   Button,
   Card,
   Flex,
+  getConfig,
   Label,
   Link,
   Pagination,
@@ -15,8 +17,9 @@ import {
   TextInput,
 } from '@gravity-ui/uikit'
 import {useWorkspace} from './context'
+import {shiftAvailabilityMessages} from '../features/shift-availability/messages'
 import {historyFields} from '../incidentHistory'
-import {approvedTeam, fullTime, standNow, type Task} from './types'
+import {approvedTeam, fullTime, standNow, type Person, type Task} from './types'
 import type {Incident} from './types'
 import {ListVirtualizer} from '@gravity-ui/uikit/virtualizer'
 import {NotificationCenter, StandChannels} from './NotificationCenter'
@@ -174,10 +177,12 @@ export function PersonalDesk({incidents}: {incidents: Incident[]}) {
           options={desk.people.map(p => ({value:p.id, content:p.name}))}
           onUpdate={([id]) => {login(id); setQuery(''); setFeedback(''); setPage(1)}} />}
         <div className="shift-availability">
-          <Switch checked={actor.available} disabled={busy}
+          <Switch checked={actor.available && (!usesRealBackend || Boolean(actor.shiftGroups?.length))}
+            disabled={busy || (usesRealBackend && !actor.shiftGroups?.length)}
             onUpdate={enabled => void act({type:'available', person:actor.id, enabled})}>
             Доступен для назначений
           </Switch>
+          {usesRealBackend && <ShiftGroups groups={actor.shiftGroups}/>}
         </div>
         <details className="shift-roster" open>
           <summary>Состав смены <span>{desk.people.length}</span></summary>
@@ -198,6 +203,13 @@ export function PersonalDesk({incidents}: {incidents: Incident[]}) {
     </div>
   )
 }
+function ShiftGroups({groups}: {groups: Person['shiftGroups']}) {
+  const copy = shiftAvailabilityMessages[getConfig().lang === 'ru' ? 'ru' : 'en']
+  return groups?.length
+    ? <Text as="p" color="secondary">{copy.groups} · {groups.map(group => group.name).join(', ')}</Text>
+    : <Text as="p" color="secondary">{(groups ? copy.noMembership : copy.notConfigured)}</Text>
+}
+
 function IncidentPicker({incidents, value, onUpdate}: {
   incidents: Incident[]; value: string; onUpdate: (key: string) => void
 }) {
@@ -389,7 +401,10 @@ export function ShiftDesk({tab, incidents}: {tab: string | undefined; incidents:
       {tab === 'handover' ? (
         <HandoverDesk incidents={incidents}/>
       ) : tab === 'notifications' ? (
-        <NotificationCenter incidents={incidents} />
+        <div className="desk-stack">
+          {usesRealBackend && <NotificationSettings />}
+          <NotificationCenter incidents={incidents} />
+        </div>
       ) : (
         <PersonalDesk incidents={incidents} />
       )}

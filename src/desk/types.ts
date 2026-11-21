@@ -53,6 +53,7 @@ export interface ShiftEvent {
   kind: 'new' | 'assign' | 'due' | 'restore'
   change: string
 }
+import type {CoordinatorAvailability} from '../entities/coordinator/model/availability.ts'
 
 export const channels = [
   'МТС Notifica',
@@ -106,6 +107,7 @@ export interface Person {
   group: string
   available: boolean
   generation: number
+  shiftGroups?: CoordinatorAvailability['groups']
 }
 export interface Attempt {
   id: string

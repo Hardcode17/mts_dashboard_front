@@ -1,4 +1,4 @@
-import type {IncidentNumber, IncidentState} from './api-types.ts'
+import type {ConfirmedIncidentLink, IncidentNumber, IncidentState, PriorityId} from './api-types.ts'
 
 export type DashboardGroup = 'critical' | 'coordinator' | 'high' | 'research'
 
@@ -32,6 +32,7 @@ export interface DashboardIncidentCard extends DashboardIncidentSummary {
   overdue: boolean
   itsmUrl: string
   itsmDemo: boolean
+  confirmedLinks?: ConfirmedIncidentLink[]
   revision: number
   eventSeq: number
 }
@@ -54,6 +55,14 @@ export interface DashboardIncidentPage {
 }
 
 export interface DashboardIncidentQuery {
+  q?: string
+  priority?: PriorityId
+  product?: string
+  team?: string
+  state?: IncidentState
+  serviceType?: string
+  deadline?: 'none' | 'late' | 'near'
+  sort?: 'updated' | 'registered' | 'deadline'
   group?: DashboardGroup[]
   includeCompleted?: boolean
   cursor?: string
