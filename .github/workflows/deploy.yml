@@ -56,6 +56,7 @@ jobs:
           import os
           import re
           import subprocess
+          from urllib.parse import urlsplit
           from urllib.request import urlopen
 
           origin = "http://127.0.0.1:" + os.environ["FRONTEND_PORT"]
@@ -79,8 +80,9 @@ jobs:
           health = json.loads(fetch("/health"))
           if health["status"] != "UP":
               raise SystemExit("Backend health check failed")
-          discovery = json.loads(fetch("/auth/realms/dashboard/.well-known/openid-configuration"))
-          if discovery["issuer"] != os.environ["OIDC_AUTHORITY"]:
+          authority = os.environ["OIDC_AUTHORITY"]
+          discovery = json.loads(fetch(urlsplit(authority).path + "/.well-known/openid-configuration"))
+          if discovery["issuer"] != authority:
               raise SystemExit("Keycloak issuer does not match FRONTEND_OIDC_AUTHORITY")
           if fetch("/auth/callback") != html.encode():
               raise SystemExit("OIDC callback does not serve the frontend")

@@ -10,9 +10,10 @@ if (!['http:', 'https:'].includes(backend.protocol) || backend.username || backe
 
 const keycloak = process.env.KEYCLOAK_URL ? new URL(process.env.KEYCLOAK_URL) : null
 const authority = keycloak ? new URL(process.env.OIDC_AUTHORITY ?? '') : null
+const keycloakPrefix = authority?.pathname.match(/^(\/(?:auth|keycloak))\/realms\/dashboard$/)?.[1]
 if (authority && (authority.protocol !== 'https:' || authority.username || authority.password ||
-    authority.pathname !== '/auth/realms/dashboard' || authority.search || authority.hash)) {
-  throw new Error('OIDC_AUTHORITY must be the public HTTPS URL ending in /auth/realms/dashboard')
+    !keycloakPrefix || authority.search || authority.hash)) {
+  throw new Error('OIDC_AUTHORITY must be the public HTTPS URL of /auth/realms/dashboard or /keycloak/realms/dashboard')
 }
 
 const omittedHeaders = new Set(['connection', 'host', 'keep-alive', 'proxy-authenticate',
@@ -56,10 +57,12 @@ function proxy(origin, path, incoming, outgoing, headers = forwardedHeaders(inco
 const server = createServer((incoming, outgoing) => {
   const path = incoming.url ?? '/'
   const pathname = path.split('?', 1)[0]
-  if (keycloak && authority && /^\/auth\/(?:realms|resources|admin)(?:\/|$)/.test(pathname)) {
+  const keycloakPath = keycloakPrefix && pathname.startsWith(keycloakPrefix + '/')
+    ? pathname.slice(keycloakPrefix.length) : ''
+  if (keycloak && authority && /^\/(?:realms|resources|admin)(?:\/|$)/.test(keycloakPath)) {
     // Keep the administrative API and the master realm on the Docker network.
-    const publicPath = /^\/auth\/(?:realms\/dashboard|resources)(?:\/[\w.-]+)*\/?$/
-    if (!publicPath.test(pathname) || /(?:^|\/)\.{1,2}(?:\/|$)/.test(pathname)) {
+    const publicPath = /^\/(?:realms\/dashboard|resources)(?:\/[\w.-]+)*\/?$/
+    if (!publicPath.test(keycloakPath) || /(?:^|\/)\.{1,2}(?:\/|$)/.test(keycloakPath)) {
       outgoing.writeHead(404).end()
       return
     }
@@ -67,7 +70,7 @@ const server = createServer((incoming, outgoing) => {
     for (const name of Object.keys(headers)) {
       if (name === 'forwarded' || name.startsWith('x-forwarded-')) delete headers[name]
     }
-    proxy(keycloak, path.slice('/auth'.length), incoming, outgoing, {
+    proxy(keycloak, path.slice(keycloakPrefix.length), incoming, outgoing, {
       ...headers,
       'x-forwarded-host': authority.host,
       'x-forwarded-port': authority.port || '443',
