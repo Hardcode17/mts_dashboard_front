@@ -2,6 +2,7 @@ import {Button, Drawer, Flex, Label, Link, Text} from '@gravity-ui/uikit'
 import type {Incident} from '../demoData'
 import {useWorkspace, useRelated} from './context'
 import {active, fullTime, dueInstant, priorityNames} from './types'
+import {itsmLink} from './itsmLink'
 export function QuickCard({item, back}: {item: Incident; back: string}) {
   const related = useRelated(item)
   const {desk, act, busy} = useWorkspace(),
@@ -62,7 +63,7 @@ export function QuickCard({item, back}: {item: Incident; back: string}) {
           Разобрать причину агентом
         </Button>
         <Link href={'#incident/' + item.key + '?tab=history'}>История изменений</Link>
-        <Link href={'#itsm/' + item.key}>Открыть в ITSM</Link>
+        <Link {...itsmLink(item.id, item.key, import.meta.env.VITE_ITSC_URL)}>Открыть в ITSM</Link>
         {related.length > 0 && (
           <Link href={'#incident/' + item.key + '?tab=work'}>
             Похожие случаи: {related.length} · проверить связь →

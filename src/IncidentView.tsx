@@ -9,6 +9,7 @@ import {Collaboration,Meeting} from './desk/CardWork'
 import {useWorkspace} from './desk/context'
 import {active,dueInstant,fullTime,priorityNames,standNow} from './desk/types'
 import {cardTimeline} from './desk/timeline'
+import {itsmLink} from './desk/itsmLink'
 import {ChangeHistory} from './ChangeHistory'
 import './IncidentView.css'
 
@@ -155,7 +156,7 @@ export function IncidentView({incident, incidents, investigating, backHref, tab}
           <Text as="h1" variant="display-2">{incident.title}</Text>
           <Text color="secondary">{incident.product} · Зарегистрирован в {incident.registered} МСК</Text>
         </Flex>
-        <Flex gap="spacing-2" wrap><Button href={'#itsm/'+incident.key} size="l">Открыть в ITSM</Button><Button size="l" view="action" disabled={busy} onClick={async()=>{await act({type:'analyze',key:incident.key});window.location.hash=`investigation/${incident.key}${suffix}`}}>Разобрать причину агентом</Button></Flex>
+        <Flex gap="spacing-2" wrap><Link {...itsmLink(incident.id, incident.key, import.meta.env.VITE_ITSC_URL)}>Открыть в ITSM</Link><Button size="l" view="action" disabled={busy} onClick={async()=>{await act({type:'analyze',key:incident.key});window.location.hash=`investigation/${incident.key}${suffix}`}}>Разобрать причину агентом</Button></Flex>
       </Flex>
       <CardDetails incidents={incidents} incident={incident} requestedTab={tab}/>
     </Flex>
