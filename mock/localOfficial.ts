@@ -2,7 +2,7 @@ import type {IncomingMessage, ServerResponse} from 'node:http'
 import {execute, items} from './engine.ts'
 import type {Incident} from '../src/demoData.ts'
 import type {Desk, Source} from '../src/desk/types.ts'
-import {itsmEnumForState, itsmStateLabels, type DirectoryUser, type ItsmState} from '../src/desk/itsmStatus.ts'
+import {itsmEnumForState, itsmStateLabels, type DirectoryUser, type ItsmState} from '../src/desk/types.ts'
 import {directoryLogin, userDirectory} from './directory.ts'
 
 /** Отказ маршрута /api/dashboard в формате AppErrorResponse бэкенда (KAN-58). */

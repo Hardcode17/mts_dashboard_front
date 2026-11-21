@@ -1,7 +1,9 @@
 import {usesRealBackend} from '../shared/api/mode'
 import {workspaceFetch} from '../auth/session'
 import {useCallback, useEffect, useRef, useState} from 'react'
-import type {Command, Desk, Source} from './types'
+import type {Command, Desk, DirectoryUser, Source} from './types'
+import {confirmedIncident, officialFailure, type OfficialCard, type OfficialChanges} from './official'
+import type {Incident} from '../demoData'
 
 interface Reply {
   desk: Desk | null
@@ -34,6 +36,8 @@ export function useDesk() {
     [error, setError] = useState(''),
     [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [directory, setDirectory] = useState<DirectoryUser[] | null>(null),
+    [directoryError, setDirectoryError] = useState('')
   const current = useRef({mode, version: -1})
   const clockOffset = useRef(0)
   const accept = useCallback((reply: Reply, source: Source) => {
@@ -99,6 +103,56 @@ export function useDesk() {
       setBusy(false)
     }
   }
+  /** Справочник исполнителей ITSM: GET /api/dashboard/users (KAN-58). */
+  const loadUsers = useCallback(async () => {
+    setDirectoryError('')
+    try {
+      const r = await workspaceFetch('/api/dashboard/users', {cache: 'no-store', signal: AbortSignal.timeout(5000)})
+      if (!r.ok) throw Error('HTTP ' + r.status)
+      const list: unknown = await r.json()
+      if (!Array.isArray(list) || !list.every((u) => u && typeof (u as DirectoryUser).login === 'string' && typeof (u as DirectoryUser).name === 'string'))
+        throw Error('Справочник получен в неожиданном формате.')
+      setDirectory(
+        list.map((u, index) => {
+          const user = u as Partial<DirectoryUser>
+          return {
+            sysId: typeof user.sysId === 'string' ? user.sysId : 'user-' + index,
+            login: user.login!,
+            name: user.name!,
+            groupName: typeof user.groupName === 'string' ? user.groupName : '',
+          }
+        }),
+      )
+      return true
+    } catch (e) {
+      setDirectoryError(e instanceof Error ? e.message : 'Справочник недоступен.')
+      return false
+    }
+  }, [])
+  // Only show a changed assignment after the API confirms the write.
+  async function patchIncident(incident: Incident, changes: OfficialChanges): Promise<{ok: boolean; error?: string; record?: Incident}> {
+    const body: Record<string, unknown> = {}
+    if (changes.assignedEmployeeLogin !== undefined) body.assignedEmployeeLogin = changes.assignedEmployeeLogin
+    if (changes.assignedGroupName !== undefined) body.assignedGroupName = changes.assignedGroupName
+    if (changes.stateEnum !== undefined) body.stateEnum = changes.stateEnum
+    if (changes.solution !== undefined) body.solution = changes.solution
+    if (!Object.keys(body).length) return {ok: false, error: 'Нет изменений для отправки.'}
+    try {
+      const r = await workspaceFetch('/api/dashboard/incidents/' + encodeURIComponent(incident.id), {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      })
+      const reply: unknown = await r.json().catch(() => null)
+      if (!r.ok) throw Error(officialFailure(r.status, reply))
+      const record = confirmedIncident(desk?.records[incident.key] ?? incident, reply as OfficialCard)
+      await refresh()
+      return {ok: true, record}
+    } catch (e) {
+      void refresh()
+      return {ok: false, error: e instanceof Error ? e.message : 'Ошибка сохранения'}
+    }
+  }
   const selectSource = useCallback((value: Source) => {
     if (usesRealBackend) return
     localStorage.setItem('mcc-source', value)
@@ -145,8 +199,12 @@ export function useDesk() {
     error,
     actionError,
     busy,
+    directory,
+    directoryError,
+    loadUsers,
     refresh,
     act,
+    patchIncident,
     clearError: () => setActionError(''),
   }
 }

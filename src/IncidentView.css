@@ -109,6 +109,8 @@
 .official-edit { max-width: 58rem; }
 .official-edit-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .official-source-badge { align-self: flex-start; }
+.official-assign { display: grid; gap: var(--g-spacing-3); margin-block-start: var(--g-spacing-4); }
+.official-assign .incident-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
 .history-comparison, .meeting-timeline {
   display: grid;
   gap: var(--g-spacing-2);

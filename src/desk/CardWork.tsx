@@ -5,6 +5,7 @@ import {useWorkspace, useRelated} from './context'
 import {dueInstant, emptyWork, fullTime, priorityNames, standNow} from './types'
 import {cardTimeline} from './timeline'
 import {cardCoordination, groupHref} from '../control-room/attention'
+import {OfficialAssignment} from './OfficialAssignment'
 import {ItsmEditor} from './ItsmEditor'
 import {RoutingAdvisor} from './RoutingAdvisor'
 import {usesRealBackend} from '../shared/api/mode'
@@ -397,11 +398,7 @@ export function OfficialCard({item, proposedTeam}: {item: Incident; proposedTeam
 }
 function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?: string}) {
   const {act} = useWorkspace()
-  const [team, setTeam] = useState(proposedTeam || item.team),
-    [priority, setPriority] = useState(String(item.priority)),
-    [status, setStatus] = useState(item.state)
-  const [solution, setSolution] = useState(item.solution ?? ''),
-    [employee, setEmployee] = useState(item.assignee ?? '')
+  const [priority, setPriority] = useState(String(item.priority))
   const due = dueInstant(item)
   const sourceDeadline = due === null ? '' : new Date(due + 3 * 3600000).toISOString().slice(0, 16).replace('T', ' ')
   const [deadline, setDeadline] = useState(sourceDeadline),
@@ -417,31 +414,17 @@ function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?:
       <Text>
         {item.product} · {item.title}
       </Text>
-      <div className="incident-fields official-edit-fields">
-        <div className="mcc-field">
-          <label htmlFor="itsm-team">Группа назначения</label>
-          <TextInput id="itsm-team" value={team} onUpdate={setTeam} />
-        </div>
-        <div className="mcc-field">
-          <label htmlFor="itsm-employee">Исполнитель</label>
-          <TextInput id="itsm-employee" value={employee} onUpdate={setEmployee} />
-        </div>
+      <Flex alignItems="center" gap="spacing-2"><Text>Текущий статус ITSM</Text><Label>{item.state}</Label></Flex>
+      <OfficialAssignment incident={item} proposedTeam={proposedTeam}/>
+      <details className="desk-details">
+        <summary>Приоритет и срок на стенде</summary>
+        <div className="incident-fields official-edit-fields">
         <div className="mcc-field">
           <label htmlFor="itsm-priority">Приоритет</label>
           <Select id="itsm-priority" width="max"
             value={[priority]}
             options={priorityNames.map((content, i) => ({value: String(i + 1), content}))}
             onUpdate={([v]) => setPriority(v)}
-          />
-        </div>
-        <div className="mcc-field">
-          <label htmlFor="itsm-status">Статус</label>
-          <Select id="itsm-status" width="max"
-            value={[status]}
-            options={['Назначен', 'В работе', 'Выполняется', 'Завершён', 'Исследование ситуации', 'Закрыт'].map(
-              (v) => ({value: v, content: v}),
-            )}
-            onUpdate={([v]) => setStatus(v)}
           />
         </div>
         <div className="mcc-field">
@@ -456,13 +439,6 @@ function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?:
           />
         </div>
       </div>
-      <div className="mcc-field">
-        <label htmlFor="itsm-solution">Описание решения</label>
-        <TextArea id="itsm-solution" rows={3}
-          value={solution}
-          onUpdate={setSolution}
-        />
-      </div>
       <Flex gap="spacing-2" wrap>
         <Button
           view="action"
@@ -472,11 +448,7 @@ function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?:
               key: item.key,
               expected,
               data: {
-                team,
                 priority: Number(priority),
-                state: status,
-                solution,
-                assignee: employee,
                 ...(dateChanged ? {due: deadline.trim() ? deadline.trim().replace(' ', 'T') + ':00+03:00' : null} : {}),
               },
             })
@@ -488,11 +460,7 @@ function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?:
         <Button
           onClick={() => {
             setExpected(item.updatedAt ?? 0)
-            setTeam(item.team)
-            setEmployee(item.assignee ?? '')
-            setStatus(item.state)
             setPriority(String(item.priority))
-            setSolution(item.solution ?? '')
             setDateChanged(false)
             setDeadline(sourceDeadline)
           }}
@@ -500,6 +468,7 @@ function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?:
           Перечитать карточку
         </Button>
       </Flex>
+      </details>
 
     </Card>
   )

@@ -1,4 +1,4 @@
-import type {DirectoryUser} from '../src/desk/itsmStatus.ts'
+import type {DirectoryUser} from '../src/desk/types.ts'
 import type {Desk, Source} from '../src/desk/types.ts'
 
 // Дежурные справочника ITSM (GET /user из контракта KAN-57): стабильные логины,
