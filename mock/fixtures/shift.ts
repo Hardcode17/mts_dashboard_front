@@ -1,58 +1,16 @@
-import type {CardRevision} from './incidentHistory.ts'
-import type {IncidentGroup} from './entities/incident/model/api-types.ts'
-import {usesRealBackend} from './shared/api/mode.ts'
+import type {CardRevision} from '../../src/incidentHistory.ts'
+import {moscowClockInstant, type Incident, type ShiftEvent} from '../../src/desk/types.ts'
 
-export interface Incident {
-  sysId?: string
-  assigneeLogin?: string
-  meetingUrl?: string | null
-  itsmUrl?: string | null
-  itsmDemo?: boolean
-  parentId?: string | null
-  upstreamService?: string
-  errorCode?: string
-  key: string
-  id: string
-  title: string
-  product: string
-  team: string
-  state: string
-  registered: string
-  due: string | null
-  priority: number
-  research: boolean
-  assignedAt?: string
-  restoredAt?: string
-  assignee?: string
-  solution?: string
-  service?: string
-  serviceType?: string
-  description?: string
-  impact?: string
-  flags?: string[]
-  dueAt?: number | null
-  deadlineStatus?: {remainingSeconds: number; overdue: boolean; observedAt: number}
-  site?:string
-  specialists?: number
-  workMinutes?:number
-  restoredEpoch?: number
-  assignedEpoch?:number
-  registeredAt?: number
-  updatedAt?: number
-  absent?: boolean
-  groups?: IncidentGroup[]
+const snapshotTime = '12:42'
+export const shiftClockBase = Date.parse('2026-11-21T12:42:00+03:00')
+
+export function withFixtureTimes(item: Incident, reference = shiftClockBase): Incident {
+  return {
+    ...item,
+    registeredAt: item.registeredAt ?? moscowClockInstant(item.registered, reference),
+    dueAt: item.dueAt !== undefined ? item.dueAt : item.due ? moscowClockInstant(item.due, reference) : null,
+  }
 }
-
-export interface ShiftEvent {
-  at?: number
-  id: string
-  key: string
-  time: string
-  kind: 'new' | 'assign' | 'due' | 'restore'
-  change: string
-}
-
-export const snapshotTime = '12:42'
 
 const sampleIncidents: Incident[] = [
   {key: 'auth', id: 'INC000021940126', product: 'МТС ID', title: 'Недоступна авторизация клиентов', registered: '12:22', due: '13:02', priority: 4, team: 'Команда авторизации', state: 'Назначен', research: false},
@@ -177,7 +135,7 @@ function makeShiftSnapshot() {
   return {incidents, events, history}
 }
 
-const shift = usesRealBackend ? {incidents: [], events: [], history: new Map()} : makeShiftSnapshot()
-export const initialIncidents = shift.incidents
+const shift = makeShiftSnapshot()
+export const initialIncidents = shift.incidents.map(item => withFixtureTimes(item))
 export const initialEvents = shift.events
 export const incidentRevisions: ReadonlyMap<string, readonly CardRevision[]> = shift.history

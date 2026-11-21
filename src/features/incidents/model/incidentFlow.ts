@@ -1,4 +1,4 @@
-import type {Incident} from '../../../demoData.ts'
+import type {Incident} from '../../../desk/types.ts'
 import {active} from '../../../desk/types.ts'
 
 const minute = 60_000

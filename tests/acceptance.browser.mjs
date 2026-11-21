@@ -268,6 +268,7 @@ test('acceptance: queue filters, responsive layouts, analysis sources, telemetry
   await p.getByRole('button', {name: 'Повторить разбор'}).click()
   await expect(p.getByText(/Обработчики платежей насыщены/).first()).toBeVisible()
   await p.getByText('Проверить на стенде',{exact:true}).click()
+  await p.getByLabel('Уникальных заказов в минуту').fill('30')
   await p.getByRole('button', {name: 'Запустить демопрогон'}).click()
   await expect
     .poll(async () => (await read('volume')).work.incident.reports[0].title)

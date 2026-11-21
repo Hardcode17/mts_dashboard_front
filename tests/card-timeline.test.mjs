@@ -1,8 +1,8 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {cardTimeline, historyValue} from '../src/desk/timeline.ts'
-import {createDesk, execute} from '../mock/engine.ts'
-import {initialIncidents} from '../src/demoData.ts'
+import {createDesk, execute, workspaceView} from '../mock/engine.ts'
+import {initialIncidents} from '../mock/fixtures/shift.ts'
 import {standNow} from '../src/desk/types.ts'
 
 test('the incident journal puts the ITSM edit and its detection on the stand clock exactly once', () => {
@@ -23,7 +23,7 @@ test('a shift journal link reaches the matching ITSM change once and still disti
   const started = Date.parse('2026-11-21T06:00:00Z')
   const desk = createDesk('volume', started)
   const item = initialIncidents.find((i) => i.key === 'incident')
-  const rows = cardTimeline(desk, item)
+  const rows = cardTimeline(workspaceView(desk), item)
   const routed = rows.filter((row) => row.journalIds?.includes('assign-market'))
   assert.equal(routed.length, 1)
   assert.equal(routed[0].category, 'ITSM')

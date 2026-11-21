@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData.ts'
+import type {Incident} from './types.ts'
 import type {CardRevision} from '../incidentHistory.ts'
 
 /** A loop is evidenced by distinct consecutive assignments ending at the current team. */

@@ -1,6 +1,6 @@
 import {useEffect, useMemo} from 'react'
 import {Button} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from '../desk/types'
 import {useWorkspace} from '../desk/context'
 import {active, standNow, moscowTime, type Desk} from '../desk/types'
 import {groupIncidents, queues, queueActivity} from '../desk/queueActivity'

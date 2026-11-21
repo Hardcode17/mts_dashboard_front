@@ -1,4 +1,4 @@
-import {additionalIncidents, initialIncidents, incidentRevisions, type Incident} from '../src/demoData.ts'
+import {additionalIncidents, initialEvents, initialIncidents, incidentRevisions, shiftClockBase, withFixtureTimes} from './fixtures/shift.ts'
 import {
   active,
   belongsToQueue,
@@ -17,14 +17,16 @@ import {
   type Command,
   type Task,
   type Channel,
+  type Incident,
 } from '../src/desk/types.ts'
 import type {CardRevision, TrackedField} from '../src/incidentHistory.ts'
-import {analyzeDemoIncident} from '../src/agentDemo.ts'
+import {analyzeDemoIncident} from './fixtures/analysis.ts'
 import {recoveryTrial, measures} from '../src/desk/recovery.ts'
 import {parseSnapshot} from './snapshot.ts'
 import {editOutageGroup, reconcileGroups} from './incidentGroups.ts'
 
 const base = new Map(initialIncidents.map((i) => [i.key, i]))
+const shiftRevisions = Object.fromEntries([...incidentRevisions].map(([key, revisions]) => [key, [...revisions]]))
 export function lookup(d: Desk, key: string) {
   return Object.hasOwn(d.records, key) ? d.records[key] : d.mode === 'volume' ? base.get(key) : undefined
 }
@@ -35,6 +37,16 @@ export function items(d: Desk) {
         ...initialIncidents.map((x) => d.records[x.key] ?? x),
         ...Object.values(d.records).filter((x) => !base.has(x.key)),
       ]
+}
+
+// Serve the fixture like any other source. It is not persisted with the edited records.
+export function workspaceView(d: Desk): Desk {
+  return d.mode === 'case' ? d : {
+    ...d,
+    records: Object.fromEntries(items(d).map(item => [item.key, item])),
+    revisions: {...shiftRevisions, ...d.revisions},
+    events: [...d.events, ...initialEvents],
+  }
 }
 const uid = (d: Desk) => String(++d.seq)
 const time = (d: Desk, now: number) => moscowTime(standNow(d, now))
@@ -278,6 +290,7 @@ export function createDesk(mode: Source, now: number): Desk {
   const d: Desk = {
     mode,
     started: now,
+    ...(mode === 'volume' && {clockBase: shiftClockBase}),
     version: 1,
     seq: 0,
     input: 'file',
@@ -430,7 +443,7 @@ export function execute(d: Desk, c: Command, now: number) {
         workMinutes: 180,
         solution: 'Инженеры восстановили маршрут офисного контроллера.',
       }
-      if (!lookup(d, historic.key)) applyCard(d, historic, now)
+      if (!lookup(d, historic.key)) applyCard(d, withFixtureTimes(historic, standNow(d, now)), now)
       const current: Incident = {
         ...historic,
         key: 'wifi-rostov',
@@ -438,6 +451,7 @@ export function execute(d: Desk, c: Command, now: number) {
         team: coordinatorGroup,
         state: 'Назначен',
         registered: time(d, now),
+        registeredAt: standNow(d, now),
         assignedAt: time(d, now),
         site: 'Ростов',
         due: moscowTime(standNow(d, now) + 7200000),
@@ -456,14 +470,15 @@ export function execute(d: Desk, c: Command, now: number) {
         id = n < 3 ? i.id : 'INC' + String(23000000 + n).padStart(12, '0')
       applyCard(
         d,
-        {
+        withFixtureTimes({
           ...i,
           id,
           key: d.mode === 'case' ? id : n < 3 ? i.key : id,
           team: coordinatorGroup,
           assignedAt: time(d, now),
           registered: time(d, now),
-        },
+          registeredAt: standNow(d, now),
+        }, standNow(d, now)),
         now,
       )
       break

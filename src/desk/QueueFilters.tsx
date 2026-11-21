@@ -1,6 +1,6 @@
 import {useMemo, useState} from 'react'
 import {Button, Select, Text, TextInput, Link} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace} from './context'
 import {priorityNames} from './types'
 

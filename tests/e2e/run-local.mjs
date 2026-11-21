@@ -151,7 +151,8 @@ try {
   await run(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--logLevel', 'warn',
     '--emptyOutDir', '--outDir', join(directory, 'dist')],
     {cwd: root, env: {...process.env, VITE_BACKEND_MODE: 'real', VITE_OIDC_AUTHORITY: authority, VITE_API_URL: '',
-      VITE_ROUTING_ADVISOR_ENABLED: 'false'}})
+       VITE_ROUTING_ADVISOR_ENABLED: 'false'}})
+  await run(process.execPath, [join(root, 'tests/e2e/assert-live-bundle.mjs'), join(directory, 'dist')], {cwd: root})
   console.log(`Starting isolated Compose project ${project}`)
   composeStarted = true
   await compose(['up', backendJar ? '--no-build' : '--build', '--detach', '--wait', '--wait-timeout', '600'])

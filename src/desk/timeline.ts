@@ -1,7 +1,5 @@
-import {incidentRevisions, initialEvents, type Incident, type ShiftEvent} from '../demoData.ts'
 import {cardChanges, historyFields, type TrackedField} from '../incidentHistory.ts'
-import {coordinatorGroup, fullTime, moscowTime, priorityNames, standNow, type Desk} from './types.ts'
-import {registrationTime} from './order.ts'
+import {coordinatorGroup, fullTime, moscowClockInstant, moscowTime, priorityNames, standNow, type Desk, type Incident, type ShiftEvent} from './types.ts'
 import {isInvestigationReport, investigationHref} from './analysisLinks.ts'
 
 export function historyValue(field: TrackedField, value: string | null | undefined) {
@@ -13,21 +11,15 @@ export function historyValue(field: TrackedField, value: string | null | undefin
 }
 
 export function cardVersions(desk: Desk, key: string) {
-  return desk.revisions[key] ?? (desk.mode === 'volume' ? incidentRevisions.get(key) : undefined) ?? []
+  return desk.revisions[key] ?? []
 }
 
-const demoMidnight = Date.parse('2026-11-21T00:00:00+03:00')
-function clockInstant(time: string, midnight = demoMidnight) {
-  const [h, m, s = '0'] = time.split(':')
-  return midnight + (+h * 3600 + +m * 60 + +s) * 1000
-}
-
-export function shiftEventTime(event: ShiftEvent) {
-  return event.at ?? clockInstant(event.time)
+export function shiftEventTime(event: ShiftEvent, shiftStart: number) {
+  return event.at ?? moscowClockInstant(event.time, shiftStart)
 }
 
 export function revisionTime(desk: Desk, stamp: string, observed: boolean) {
-  if (!stamp.includes('T')) return clockInstant(stamp)
+  if (!stamp.includes('T')) return moscowClockInstant(stamp, desk.clockBase ?? desk.started)
   const at = Date.parse(stamp)
   return observed ? standNow(desk, at) : at
 }
@@ -63,8 +55,8 @@ function matchingKinds(changes: Changes): ShiftEvent['kind'][] {
 }
 
 export function cardTimeline(desk: Desk, item: Incident) {
-  const registeredAt = registrationTime(item)
-  const rows: TimelineEntry[] = [
+  const registeredAt = item.registeredAt
+  const rows: TimelineEntry[] = registeredAt == null ? [] : [
     {
       id: 'registered',
       at: registeredAt,
@@ -112,29 +104,25 @@ export function cardTimeline(desk: Desk, item: Incident) {
       revisionsByEvent.set('source/' + at + '/' + kind, row)
     }
   }
-  for (const events of desk.mode === 'volume' ? [desk.events, initialEvents] : [desk.events]) {
-    for (const event of events) {
-      if (event.key !== item.key) continue
-      const at = shiftEventTime(event)
-      const revision = revisionsByEvent.get(
-        (events === desk.events ? 'observed/' : 'source/') + at + '/' + event.kind,
-      )
-      if (revision) {
-        revision.journalIds ??= []
-        if (!revision.journalIds.length) revision.title = event.change
-        revision.journalIds.push(event.id)
-      } else {
-        const fromItsm = event.kind !== 'due'
-        rows.push({
-          id: 'event-' + event.id,
-          journalIds: [event.id],
-          at,
-          text: event.change,
-          source: fromItsm ? 'ITSM' : 'Пульт смены',
-          category: fromItsm ? 'ITSM' : 'Смена',
-          timeBasis: fromItsm && event.at != null ? 'observed' : undefined,
-        })
-      }
+  for (const event of desk.events) {
+    if (event.key !== item.key) continue
+    const at = shiftEventTime(event, desk.clockBase ?? desk.started)
+    const revision = revisionsByEvent.get((event.at === undefined ? 'source/' : 'observed/') + at + '/' + event.kind)
+    if (revision) {
+      revision.journalIds ??= []
+      if (!revision.journalIds.length) revision.title = event.change
+      revision.journalIds.push(event.id)
+    } else {
+      const fromItsm = event.kind !== 'due'
+      rows.push({
+        id: 'event-' + event.id,
+        journalIds: [event.id],
+        at,
+        text: event.change,
+        source: fromItsm ? 'ITSM' : 'Пульт смены',
+        category: fromItsm ? 'ITSM' : 'Смена',
+        timeBasis: fromItsm && event.at != null ? 'observed' : undefined,
+      })
     }
   }
   function shift(id: string, at: number, text: string, source = 'Смена') {
@@ -199,8 +187,7 @@ export function cardTimeline(desk: Desk, item: Incident) {
       text: event.who + ' · ' + event.text,
     })
   }
-  // Old demo rooms have only a local clock per invitation or visit. Do not display an inferred date.
-  const midnight = Math.floor((registeredAt + 3 * 3600000) / 86400000) * 86400000 - 3 * 3600000
+  // Legacy rooms have only a local clock per invitation or visit. Do not display an inferred date.
   for (const [index, m] of (room?.members ?? []).entries()) {
     for (const [stamp, title, source] of [
       [m.invited, 'Приглашение', 'Emergency Room'],
@@ -210,7 +197,7 @@ export function cardTimeline(desk: Desk, item: Incident) {
       if (stamp && !recordedVisits.has(JSON.stringify([m.role, stamp, title])))
         rows.push({
           id: 'visit-' + index + '-' + title,
-          at: clockInstant(stamp, midnight),
+          at: moscowClockInstant(stamp, registeredAt ?? desk.clockBase ?? desk.started),
           source,
           category: 'Комната',
           timeBasis: 'clockOnly',

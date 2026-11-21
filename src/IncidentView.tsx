@@ -1,7 +1,7 @@
 import {useEffect, useRef} from 'react'
 import {Chart, type ChartData} from '@gravity-ui/charts'
 import {Button, Card, Flex, Label, Link, Tab, TabList, TabPanel, TabProvider, Text} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
+import type {Incident} from './desk/types'
 import {AgentInvestigation} from './AgentInvestigation'
 import {IncidentChronology} from './ChangeHistory'
 import {InvestigationAction} from './InvestigationAction'

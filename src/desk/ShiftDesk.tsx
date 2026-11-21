@@ -17,7 +17,7 @@ import {
 import {useWorkspace} from './context'
 import {historyFields} from '../incidentHistory'
 import {approvedTeam, fullTime, standNow, type Task} from './types'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {ListVirtualizer} from '@gravity-ui/uikit/virtualizer'
 import {NotificationCenter, StandChannels} from './NotificationCenter'
 import {IncidentHandover} from './CardWork'

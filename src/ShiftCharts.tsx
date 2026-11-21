@@ -1,7 +1,7 @@
 import {useMemo, useState} from 'react'
 import {Chart, type ChartData} from '@gravity-ui/charts'
 import {Button, Card, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
+import type {Incident} from './desk/types'
 import {useWorkspace} from './desk/context'
 import {followOverviewAnchor} from './desk/queueNavigation'
 import {moscowTime, standNow} from './desk/types'

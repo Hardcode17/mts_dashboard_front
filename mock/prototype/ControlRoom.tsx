@@ -1,15 +1,14 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {Button, Drawer, ThemeProvider} from '@gravity-ui/uikit'
 import {Table, useTable, type ColumnDef} from '@gravity-ui/table'
-import type {Incident} from '../demoData'
-import {dueInstant} from '../desk/types'
-import {queues} from '../desk/queueActivity'
+import {dueInstant, type Incident} from '../../src/desk/types'
+import {queues} from '../../src/desk/queueActivity'
 import {canonicalIds, clock, sceneAt, start} from './minute'
-import {analyzeDemoIncident} from '../agentDemo'
-import mark from '../assets/mts-symbol.svg'
-import '../control-room/control-room.css'
-import {ActivityFeed} from '../control-room/ActivityFeed'
-import {ShiftIndicators} from '../control-room/ShiftIndicators'
+import {analyzeDemoIncident} from '../fixtures/analysis'
+import mark from '../../src/assets/mts-symbol.svg'
+import '../../src/control-room/control-room.css'
+import {ActivityFeed} from '../../src/control-room/ActivityFeed'
+import {ShiftIndicators} from '../../src/control-room/ShiftIndicators'
 
 const idLink = (i: Incident) => (
   <a className="cr-number" href={'#inc/' + i.id}>

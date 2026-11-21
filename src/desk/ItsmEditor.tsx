@@ -1,7 +1,7 @@
 import {workspaceFetch} from '../auth/session'
 import {useEffect, useId, useState, type ReactNode} from 'react'
 import {Button, Card, Flex, Label, Link, Select, Text, TextArea, TextInput} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace} from './context'
 
 interface DirectoryEntry {

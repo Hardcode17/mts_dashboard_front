@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto'
-import {incidentRevisions, type Incident} from '../src/demoData.ts'
+import {incidentRevisions} from './fixtures/shift.ts'
+import type {Incident} from '../src/desk/types.ts'
 import {active, type Command, type Desk} from '../src/desk/types.ts'
 import {registrationTime} from '../src/desk/order.ts'
 import {assignmentCycle} from '../src/desk/assignmentCycle.ts'

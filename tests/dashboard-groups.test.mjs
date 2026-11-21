@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {groupIncidents, recentlyUpdated} from '../src/desk/incidentGroups.ts'
-import {initialIncidents} from '../src/demoData.ts'
+import {initialIncidents} from '../mock/fixtures/shift.ts'
 
 test('a critical P4 assigned to the coordinators appears in both groups', () => {
   const items = initialIncidents.filter(item => ['incident', 'delivery', 'premium'].includes(item.key))

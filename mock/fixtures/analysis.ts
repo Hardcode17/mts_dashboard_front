@@ -1,4 +1,4 @@
-import type {Incident} from './demoData.ts'
+import {unknownTechnicalRecipient, type Incident, type InvestigationAnalysis} from '../../src/desk/types.ts'
 
 type Sample =
   | {kind: 'payment'; waitMs: number; cpuPercent: number; held: number; pool: number}
@@ -10,19 +10,11 @@ const samples: Readonly<Record<string, Sample | undefined>> = {
   INC000021940126: {kind: 'auth', failures: 50, profileTimeouts: 47, timeoutMs: 1500},
 }
 
-export const unknownTechnicalRecipient = 'Технический адресат не подтверждён'
-
-interface Evidence {
-  source: string
-  finding: string
-  record: string
-}
-
 export function analyzeDemoIncident(
   incident: Incident,
   sample: Sample | null | undefined = samples[incident.id],
-) {
-  const evidence: Evidence[] = [
+): InvestigationAnalysis {
+  const evidence: InvestigationAnalysis['evidence'] = [
     {
       source: 'ITSM',
       finding: incident.state + ' · ' + incident.team,

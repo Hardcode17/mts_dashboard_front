@@ -1,8 +1,7 @@
-import type {Incident} from '../demoData.ts'
-import {active, dueInstant} from './types.ts'
+import {active, dueInstant, type Incident} from './types.ts'
 
 export function registrationTime(item: Incident) {
-  return item.registeredAt ?? Date.parse('2026-11-21T' + item.registered + ':00+03:00')
+  return item.registeredAt ?? 0
 }
 
 export function incidentOrder(a: Incident, b: Incident) {

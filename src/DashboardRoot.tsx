@@ -4,7 +4,7 @@ import App from './App'
 import {DashboardAuth} from './features/auth/DashboardAuth'
 import {usesRealBackend} from './shared/api/mode'
 
-const ControlRoom = lazy(() => import('./prototype/ControlRoom'))
+const ControlRoom = usesRealBackend ? null : lazy(() => import('virtual:mcc-local-prototype'))
 
 export default function DashboardRoot() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -14,7 +14,7 @@ export default function DashboardRoot() {
     setTheme(value)
     try { localStorage.setItem('mcc-theme', value) } catch { /* Storage can be unavailable in local previews. */ }
   }
-  if (!usesRealBackend && /^\/prototype\/cerebro\/?$/.test(window.location.pathname)) {
+  if (ControlRoom && /^\/prototype\/cerebro\/?$/.test(window.location.pathname)) {
     return <Suspense fallback={<p role="status">Загрузка пульта смены…</p>}><ControlRoom /></Suspense>
   }
   const workspace = <App theme={theme} changeTheme={changeTheme} />

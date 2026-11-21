@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {itsmStateLabels, type ItsmState} from './types'
 
 /**

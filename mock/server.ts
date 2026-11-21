@@ -10,7 +10,8 @@ import {handleFixtureRelationships} from './relationships.ts'
 import {pendingGroupReviews, applyGroupReview, reconcileGroups} from './incidentGroups.ts'
 import {sampleMonitorHistory} from './monitorHistory.ts'
 import {shopStand} from './shop.ts'
-import {applyCard, applySnapshot, createDesk, dispatchTasks, execute, items, lookup, tickDesk} from './engine.ts'
+import {applyCard, applySnapshot, createDesk, dispatchTasks, execute, items, lookup, tickDesk, workspaceView} from './engine.ts'
+import {shiftClockBase, withFixtureTimes} from './fixtures/shift.ts'
 import {itsmGateway, ItsmError, mergeConfirmation} from './itsm.ts'
 import {requireWorkspaceUser, workspaceAuthSettings} from './workspaceAuth.ts'
 import {coordinatorGroup, type Desk, type Command, type Source} from '../src/desk/types.ts'
@@ -99,6 +100,10 @@ export function mockService(
     const legacy = row && d.records !== undefined
     d.records ??= readRows('incident')
     d.revisions ??= readRows('revisions')
+    if (mode === 'volume') {
+      d.clockBase ??= shiftClockBase
+      for (const [key, item] of Object.entries(d.records)) d.records[key] = withFixtureTimes(item)
+    }
     if (liveBackend) d.signals = d.signals.filter(signal => /^evt-\d+$/.test(signal.id))
     const withoutGroups = !d.outageGroups
     if (withoutGroups) reconcileGroups(d,items(d),Date.now())
@@ -238,7 +243,7 @@ export function mockService(
           now: Date.now(),
           desk: url.searchParams.get('since') === String(d.version) ? null : live && d.apiBeforeFirstSuccess
             ? {...createDesk('case', d.started), version: d.version, people: d.people, enabled: [], apiBeforeFirstSuccess: true, sourceError: d.sourceError}
-            : d,
+            : workspaceView(d),
         })
       }
       if (
@@ -302,7 +307,7 @@ export function mockService(
           pollFile()
         }
         return send(res, 200, {
-          desk: current(),
+          desk: workspaceView(current()),
           ...(live && {person: profile.id}),
           version: current().version,
           now,

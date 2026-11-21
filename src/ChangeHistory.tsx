@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {Card, Link, Pagination, SegmentedRadioGroup, Select, Text} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
+import type {Incident} from './desk/types'
 import {historyFields, type TrackedField} from './incidentHistory'
 import {useWorkspace} from './desk/context'
 import {cardTimeline, cardVersions, historyValue, revisionTime, type TimelineEntry} from './desk/timeline'

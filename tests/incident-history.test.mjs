@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
-import {additionalIncidents, initialIncidents, incidentRevisions} from '../src/demoData.ts'
+import {additionalIncidents, initialIncidents, incidentRevisions} from '../mock/fixtures/shift.ts'
 import {cardChanges} from '../src/incidentHistory.ts'
 
 test('partial revisions retain known fields and repeated snapshots produce no changes', () => {

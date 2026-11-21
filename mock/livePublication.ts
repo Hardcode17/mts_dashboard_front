@@ -1,6 +1,6 @@
 import {AsyncLocalStorage} from 'node:async_hooks'
 import type {IncomingHttpHeaders} from 'node:http'
-import type {Incident} from '../src/demoData.ts'
+import type {Incident} from '../src/desk/types.ts'
 import type {Desk, Signal} from '../src/desk/types.ts'
 import {itsmStateLabels} from '../src/desk/types.ts'
 import {createIncidentsApi} from '../src/features/incidents/api/client.ts'

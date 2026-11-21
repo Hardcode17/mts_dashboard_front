@@ -1,5 +1,5 @@
 import {Button, Drawer, Flex, Label, Link, Text} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {InvestigationAction} from '../InvestigationAction'
 import {cardCoordination, groupHref} from '../control-room/attention'
 import {useRelated, useWorkspace} from './context'
