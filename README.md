@@ -134,9 +134,20 @@ npm run dev -- --host localhost --port 3000
 Docker-образ собирает статику в API-режиме и запускает `server/start.mjs` от пользователя `node`. Compose публикует приложение на `FRONTEND_PORT` и передаёт backend-адрес в контейнер.
 
 На Raspberry Pi фронтенд разворачивает workflow **Deploy backend** в общем
-Compose-проекте `mts-dashboard-backend`. Выпускайте изменения фронтенда через
-этот workflow после слияния в `main`. В репозитории фронтенда Actions
-проверяет сборку.
+Compose-проекте `mts-dashboard-backend`. После обновления `main` фронтенда
+и успешной проверки сборки Actions вызывает **Deploy backend**.
+
+Для настройки автодеплоя:
+
+1. [Создайте fine-grained token](https://github.com/settings/personal-access-tokens/new).
+   В **Resource owner** выберите `Hardcode17`, в **Only select repositories** —
+   `mts_dashboard_backend`, в **Repository permissions → Actions** —
+   **Read and write**. Если токен в статусе **Pending**, дождитесь одобрения
+   владельцем организации.
+2. Сохраните токен под именем `STAND_DEPLOY_TOKEN` в Actions Secrets
+   [фронтенда](https://github.com/Hardcode17/mts_dashboard_front/settings/secrets/actions)
+   и [data](https://github.com/Hardcode17/mts_dashboard_data/settings/secrets/actions).
+   Пока секрета нет, **Deploy backend** можно запустить вручную из бэкенда.
 
 Funnel направляет запросы на frontend. Запросы дашборда идут в бэкенд
 по внутренней сети Docker. Запросы realm `dashboard` и его ресурсов frontend
