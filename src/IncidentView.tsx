@@ -6,6 +6,7 @@ import {
 import type {Incident} from './demoData'
 import {AgentInvestigation} from './AgentInvestigation'
 import {Collaboration,Meeting} from './desk/CardWork'
+import {OfficialAssignment} from './desk/OfficialAssignment'
 import {useWorkspace} from './desk/context'
 import {active,dueInstant,fullTime,priorityNames,standNow} from './desk/types'
 import {cardTimeline} from './desk/timeline'
@@ -51,6 +52,7 @@ function Assignment({incident}: {incident: Incident}) {
         <DefinitionList.Item name="Источник назначения">ITSM</DefinitionList.Item>
         {incident.restoredAt && <DefinitionList.Item name="Устранён">{incident.restoredAt} МСК</DefinitionList.Item>}
       </DefinitionList>
+      <OfficialAssignment incident={incident}/>
     </Card>
   )
 }

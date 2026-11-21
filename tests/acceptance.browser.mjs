@@ -359,6 +359,67 @@ test('refreshing a full card preserves the route back to its filtered queue', as
   await expect(page.locator('main a').filter({hasText: /←/}).first()).toHaveAttribute('href', listing)
 })
 
+test('acceptance: official reassignment uses the directory, confirms the overwrite and rolls back on rejection', async (t) => {
+  const {open, root, read} = await stand(t)
+  const p = await open('volume', 'anna')
+  const id = 'INC000021940087'
+  await p.goto(root + '/#incident/access')
+  await expect(p.getByRole('heading', {name: /Ошибка входа в профиль/})).toBeVisible()
+  // Исполнитель выбирается из справочника бэкенда, группа и статус меняются вместе.
+  await p.getByLabel('Исполнитель').click()
+  await p.getByRole('option', {name: /Марат Ветров/}).click()
+  await p.getByLabel('Группа назначения').fill('Сеть L2')
+  await p.getByLabel('Статус').click()
+  await p.getByRole('option', {name: 'Выполняется'}).click()
+  // Перезапись существующего назначения требует явного подтверждения.
+  await p.getByRole('button', {name: 'Сохранить в ITSM'}).click()
+  const confirm = p.getByRole('dialog', {name: 'Перезаписать назначение?'})
+  await expect(confirm).toBeVisible()
+  await confirm.getByRole('button', {name: 'Перезаписать'}).click()
+  await expect(p.getByText('Применено', {exact: true})).toBeVisible()
+  // Карточка и группы отражают подтверждённый ответ сервера.
+  await expect
+    .poll(async () => {
+      const record = (await read('volume')).records.access
+      return record.team + '|' + record.assignee + '|' + record.state
+    })
+    .toBe('Сеть L2|Марат Ветров|Выполняется')
+  await expect(p.getByRole('region', {name: 'Официальное назначение'})).toContainText('Марат Ветров')
+  // Повторная публикация того же состояния не дублирует запись истории.
+  const history = (await read('volume')).revisions.access.length
+  const repeat = await fetch(root + '/api/dashboard/incidents/' + id, {
+    method: 'PATCH',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify({
+      assignedGroupName: 'Сеть L2',
+      assignedEmployeeLogin: 'auth1',
+      stateEnum: 'WorkInProgress',
+    }),
+  })
+  assert.equal(repeat.status, 200)
+  assert.equal((await read('volume')).revisions.access.length, history)
+  // Завершающий статус требует текст решения и фиксирует его в карточке.
+  await p.getByLabel('Статус').click()
+  await p.getByRole('option', {name: 'Закрыт'}).click()
+  await p.getByLabel('Описание решения').fill('Работа над INC завершена на стенде.')
+  await p.getByRole('button', {name: 'Сохранить в ITSM'}).click()
+  await expect
+    .poll(async () => (await read('volume')).records.access.state)
+    .toBe('Закрыт')
+  // Отказ сервера виден с причиной, показ откатывается к подтверждённому состоянию,
+  // а введённые значения остаются в форме для исправления.
+  await p.getByLabel('Статус').click()
+  await p.getByRole('option', {name: 'Выполняется'}).click()
+  await p.getByRole('button', {name: 'Сохранить в ITSM'}).click()
+  await expect(p.getByRole('alert')).toContainText('INCIDENT_CONFLICT')
+  await expect(p.getByRole('alert')).toContainText('исправьте значения')
+  await expect
+    .poll(async () => (await read('volume')).records.access.state)
+    .toBe('Закрыт')
+  await expect(p.getByText('Закрыт', {exact: true}).first()).toBeVisible()
+  await expect(p.getByLabel('Статус')).toContainText('Выполняется')
+})
+
 test('expanded agent diagnostics keep labels, checkboxes and the submit action visibly separated', async t => {
   const {open, root} = await stand(t)
   const p = await open()
