@@ -1,121 +1,27 @@
-name: Deploy frontend
+name: Check frontend
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: frontend-production
-  cancel-in-progress: false
-
 jobs:
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, Linux, ARM64, pi-web]
-    timeout-minutes: 30
+  check:
+    runs-on: ubuntu-latest
+    container: node:24-bookworm
     env:
-      COMPOSE_PROJECT_NAME: mts-dashboard-front
-      FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8080' }}
-      BACKEND_URL: ${{ vars.FRONTEND_BACKEND_URL || 'http://backend:8080' }}
-      OIDC_AUTHORITY: ${{ vars.FRONTEND_OIDC_AUTHORITY }}
-      MCC_GROUP_MODEL: ${{ vars.MCC_GROUP_MODEL }}
-      MCC_OLLAMA_URL: ${{ vars.MCC_OLLAMA_URL }}
-      COMPOSE_FILE: compose.yaml:compose.pi.yaml
-    defaults:
-      run:
-        shell: bash
+      VITE_BACKEND_MODE: real
+      VITE_OIDC_AUTHORITY: https://example.invalid/keycloak/realms/dashboard
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - name: Check Docker
-        run: |
-          docker info
-          docker compose version
-          docker compose config --quiet
-
-      - name: Build and validate frontend
-        run: docker compose build --pull frontend
-
-      - name: Deploy and wait for healthcheck
-        run: docker compose up -d --no-build --wait --wait-timeout 120 frontend
-
-      - name: Verify deployed revision and published frontend
-        run: |
-          container_id=$(docker compose ps -q frontend)
-          image_id=$(docker inspect --format '{{.Image}}' "$container_id")
-          revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image_id")
-          test "$revision" = "$GITHUB_SHA"
-          echo "Running image revision: $revision"
-          python3 - <<'PY'
-          import json
-          import os
-          import re
-          import subprocess
-          from urllib.error import HTTPError
-          from urllib.parse import urlsplit
-          from urllib.request import Request, urlopen
-
-          origin = "http://127.0.0.1:" + os.environ["FRONTEND_PORT"]
-
-          def fetch(path):
-              with urlopen(origin + path, timeout=10) as response:
-                  return response.read()
-
-          def expect_http_error(path, status):
-              request = Request(origin + path, headers={"Accept": "application/json"})
-              try:
-                  with urlopen(request, timeout=10):
-                      pass
-              except HTTPError as error:
-                  if error.code == status:
-                      return
-                  raise
-              raise SystemExit(f"{path} did not return HTTP {status}")
-
-          def check_asset(path, filename):
-              expected = subprocess.check_output(["docker", "compose", "exec", "-T", "frontend", "cat", filename])
-              received = fetch(path)
-              if received != expected:
-                  raise SystemExit(f"Unexpected content at {path}")
-              return received
-
-          html = check_asset("/", "dist/index.html").decode()
-          bundle = re.search(r'<script\b[^>]*\bsrc="(/assets/[\w.-]+\.js)"', html)
-          if not bundle:
-              raise SystemExit("Frontend entry bundle missing")
-          check_asset(bundle[1], "dist" + bundle[1])
-          health = json.loads(fetch("/health"))
-          if health["status"] != "UP":
-              raise SystemExit("Backend health check failed")
-          expect_http_error("/api/dashboard/incidents", 401)
-          expect_http_error("/api/stand/snapshot", 404)
-          authority = os.environ["OIDC_AUTHORITY"]
-          discovery = json.loads(fetch(urlsplit(authority).path + "/.well-known/openid-configuration"))
-          if discovery["issuer"] != authority:
-              raise SystemExit("Keycloak issuer does not match FRONTEND_OIDC_AUTHORITY")
-          if fetch("/auth/callback") != html.encode():
-              raise SystemExit("OIDC callback does not serve the frontend")
-          print(f"Published frontend matches the running image and backend reports {health['status']}")
-          PY
-
-      - name: Open the published sign-in page in Chromium
-        timeout-minutes: 10
-        run: |
-          docker build --target stand-browser --tag mts-dashboard-front-stand-browser .
-          docker run --rm --network host --shm-size=256m --env FRONTEND_PORT mts-dashboard-front-stand-browser
-
-      - name: Show deployment status
-        run: docker compose ps
-
-      - name: Show logs on failure
-        if: failure()
-        run: |
-          docker compose ps -a
-          docker compose logs --tail 100 frontend
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: node tests/e2e/assert-live-bundle.mjs
