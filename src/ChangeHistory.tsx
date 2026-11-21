@@ -41,29 +41,35 @@ export function ChangeHistory({incident}: {incident: Incident}) {
       {versions.length > 1 && (
         <details>
           <summary>Сравнить версии карточки</summary>
-          <Flex gap="spacing-2" wrap>
-            <Select
-              label="Было"
-              value={[String(a)]}
-              options={options}
-              onUpdate={([v]) => setLeft(Number(v))}
-            />
-            <Select
-              label="Стало"
-              value={[String(b)]}
-              options={options}
-              onUpdate={([v]) => setRight(Number(v))}
-            />
-          </Flex>
-          {changed.length ? (
-            changed.map((k) => (
-              <p key={k}>
-                <strong>{historyFields[k]}</strong>: {historyValue(k, from[k])} → {historyValue(k, to[k])}
-              </p>
-            ))
-          ) : (
-            <p>Значения совпадают.</p>
-          )}
+          <div className="mcc-disclosure-body">
+            <div className="incident-fields">
+              <div className="mcc-field">
+                <label htmlFor="revision-before">Было</label>
+                <Select id="revision-before" width="max"
+                  value={[String(a)]}
+                  options={options}
+                  onUpdate={([v]) => setLeft(Number(v))}
+                />
+              </div>
+              <div className="mcc-field">
+                <label htmlFor="revision-after">Стало</label>
+                <Select id="revision-after" width="max"
+                  value={[String(b)]}
+                  options={options}
+                  onUpdate={([v]) => setRight(Number(v))}
+                />
+              </div>
+            </div>
+            {changed.length ? (
+              <ul className="history-comparison">{changed.map((k) => (
+                <li key={k}>
+                  <strong>{historyFields[k]}</strong>: {historyValue(k, from[k])} → {historyValue(k, to[k])}
+                </li>
+              ))}</ul>
+            ) : (
+              <p>Значения совпадают.</p>
+            )}
+          </div>
         </details>
       )}
       {revisions.length === 0 && (

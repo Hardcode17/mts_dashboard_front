@@ -95,7 +95,7 @@ const columns: ColumnDef<Incident>[] = [
 function IncidentTable({rows, label}: {rows: Incident[]; label: string}) {
   const {width} = useViewportSize()
   const table = useTable({data: rows, columns, getRowId: (item) => item.key})
-  if (width !== undefined && width <= 700) return (
+  if (width !== undefined && width <= 864) return (
     <ul className="overview-incident-list" aria-label={label}>
       {rows.map(item => <li key={item.key}>
         <Link view="primary" href={'#drawer/' + item.key}>
@@ -222,10 +222,16 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
           {soonOnly && <Label type="close" theme="warning" closeButtonLabel="Снять фильтр по сроку" onCloseClick={() => update({sla: '', page: ''})}>До 30 минут</Label>}
         </Flex>
         <div className="overview-controls">
-          <TextInput size="l" value={query} onUpdate={(q) => update({q, page: ''})} hasClear
-            placeholder="Номер, продукт, сбой или команда" controlProps={{'aria-label': groupKey === 'all' ? 'Поиск по всем инцидентам' : 'Поиск в очереди'}} />
-          <Select size="l" label="Порядок" value={[sort]} options={sortOptions}
-            onUpdate={([value]) => update({sort: value === 'deadline' ? '' : value, page: ''})} />
+          <div className="mcc-field">
+            <label htmlFor="queue-search">Поиск</label>
+            <TextInput id="queue-search" size="l" value={query} onUpdate={q => update({q, page:''})} hasClear
+              placeholder="Номер, продукт, сбой или команда" controlProps={{'aria-label': groupKey === 'all' ? 'Поиск по всем инцидентам' : 'Поиск в очереди'}} />
+          </div>
+          <div className="mcc-field">
+            <label htmlFor="queue-order">Порядок</label>
+            <Select id="queue-order" width="max" size="l" value={[sort]} options={sortOptions}
+              onUpdate={([value]) => update({sort: value === 'deadline' ? '' : value, page:''})} />
+          </div>
         </div>
       </div>
       <QueueFilters incidents={incidents} queue={groupKey} params={params} update={update} reset={() => update(clearFilters)} />

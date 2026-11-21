@@ -49,19 +49,28 @@ export function MessageComposer({incident}: {incident: Incident}) {
   )
   const [sent, setSent] = useState(false)
   return (
-    <Card className="mcc-glass incident-panel">
+    <Card className="mcc-glass incident-panel shift-message-composer">
       <Text as="h3" variant="subheader-3">
         Запрос статуса и эскалация
       </Text>
-      <TextInput label="Получатель" value={recipient} onUpdate={value => {setRecipient(value); setSent(false)}} />
-      <TextArea value={text} onUpdate={value => {setText(value); setSent(false)}} controlProps={{'aria-label': 'Текст сообщения'}} rows={3} />
-      <ChannelPicker
-        value={selected}
-        change={(v) => {
-          setSelected(v)
-          setSent(false)
-        }}
-      />
+      <div className="mcc-field">
+        <label htmlFor="shift-message-to">Получатель</label>
+        <TextInput id="shift-message-to" value={recipient} onUpdate={value => {setRecipient(value); setSent(false)}} />
+      </div>
+      <div className="mcc-field">
+        <label htmlFor="shift-message-text">Текст сообщения</label>
+        <TextArea id="shift-message-text" value={text} onUpdate={value => {setText(value); setSent(false)}} rows={3} />
+      </div>
+      <fieldset className="shift-message-channels">
+        <legend>Каналы отправки</legend>
+        <ChannelPicker
+          value={selected}
+          change={(v) => {
+            setSelected(v)
+            setSent(false)
+          }}
+        />
+      </fieldset>
       <Flex gap="spacing-2" wrap>
         <Button
           disabled={!text.trim() || !recipient.trim() || !selected.length || busy}
@@ -136,29 +145,37 @@ export function NotificationCenter({incidents}: {incidents: Incident[]}) {
           <Link href={'#incident/' + incidentKey + '?tab=work'}>{numbers.get(incidentKey) ?? incidentKey} · Работа смены</Link>
           <Link href="#desk/notifications">Все инциденты</Link>
         </Flex>}
-        <Flex gap="spacing-2" wrap>
-          <Select
-            label="Канал"
-            value={[channel]}
-            options={['all', ...channels].map((v) => ({value: v, content: v === 'all' ? 'Все' : v}))}
-            onUpdate={([v]) => {
-              setChannel(v)
-              setPage(1)
-            }}
-          />
-          <Select
-            label="Результат"
-            value={[status]}
-            options={['all', 'Доставлено', 'Ошибка', 'Прочитано'].map((v) => ({
-              value: v,
-              content: v === 'all' ? 'Все' : v,
-            }))}
-            onUpdate={([v]) => {
-              setStatus(v)
-              setPage(1)
-            }}
-          />
-        </Flex>
+        <div className="shift-delivery-filters">
+          <div className="mcc-field">
+            <label htmlFor="shift-delivery-channel">Канал</label>
+            <Select
+              id="shift-delivery-channel"
+              width="max"
+              value={[channel]}
+              options={['all', ...channels].map((v) => ({value: v, content: v === 'all' ? 'Все' : v}))}
+              onUpdate={([v]) => {
+                setChannel(v)
+                setPage(1)
+              }}
+            />
+          </div>
+          <div className="mcc-field">
+            <label htmlFor="shift-delivery-status">Результат</label>
+            <Select
+              id="shift-delivery-status"
+              width="max"
+              value={[status]}
+              options={['all', 'Доставлено', 'Ошибка', 'Прочитано'].map((v) => ({
+                value: v,
+                content: v === 'all' ? 'Все' : v,
+              }))}
+              onUpdate={([v]) => {
+                setStatus(v)
+                setPage(1)
+              }}
+            />
+          </div>
+        </div>
         <Flex alignItems="center" wrap gap="spacing-3">
           <Checkbox checked={mine} onUpdate={value => {setMine(value); setPage(1)}}>Мои назначения</Checkbox>
           <Text color="secondary">Доставок: {rows.length}</Text>
@@ -221,12 +238,14 @@ export function NotificationCenter({incidents}: {incidents: Incident[]}) {
         />
         <details>
           <summary>Имитировать ошибку доставки</summary>
-          <p>Выбранные адаптеры вернут ошибку. Снимите пометку и повторите нужную доставку.</p>
-          <ChannelPicker
-            disabled={busy}
-            value={desk.failedChannels}
-            change={(c) => void act({type: 'failChannels', channels: c})}
-          />
+          <div className="mcc-disclosure-body">
+            <Text as="p" color="secondary">Выбранные каналы вернут ошибку. Чтобы повторить доставку, сначала снимите отметку.</Text>
+            <ChannelPicker
+              disabled={busy}
+              value={desk.failedChannels}
+              change={(c) => void act({type: 'failChannels', channels: c})}
+            />
+          </div>
         </details>
       </Card>
     </div>

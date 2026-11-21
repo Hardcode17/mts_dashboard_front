@@ -42,16 +42,18 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
       </Text>
       {measured && (
         <>
-          <Select
-            label="Доступность по графику стенда"
-            value={[availability]}
-            options={[
-              {value: 'ready', content: 'Трое свободны'},
-              {value: 'wait', content: 'Двое свободны, третий через час'},
-              {value: 'unknown', content: 'Нет ответа о доступности'},
-            ]}
-            onUpdate={([v]) => void act({type: 'advisor', key: item.key, kind: 'availability', value: v})}
-          />
+          <div className="mcc-field">
+            <label htmlFor="advisor-availability">Доступность по графику стенда</label>
+            <Select id="advisor-availability" width="max"
+              value={[availability]}
+              options={[
+                {value: 'ready', content: 'Трое свободны'},
+                {value: 'wait', content: 'Двое свободны, третий через час'},
+                {value: 'unknown', content: 'Нет ответа о доступности'},
+              ]}
+              onUpdate={([v]) => void act({type: 'advisor', key: item.key, kind: 'availability', value: v})}
+            />
+          </div>
           <Text>
             {wait === null
               ? 'Ожидание неизвестно. Спросить старшего смены, когда будет полный состав.'
@@ -65,8 +67,16 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
           </Text>
         </>
       )}
-      <TextInput label="Предлагаемая команда" value={team} onUpdate={setTeam} />
-      <TextInput label="Комментарий координатора" value={reason} onUpdate={setReason} />
+      <div className="incident-fields">
+        <div className="mcc-field">
+          <label htmlFor="advisor-team">Предлагаемая команда</label>
+          <TextInput id="advisor-team" value={team} onUpdate={setTeam} />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="advisor-comment">Комментарий координатора</label>
+          <TextInput id="advisor-comment" value={reason} onUpdate={setReason} />
+        </div>
+      </div>
       <Flex gap="spacing-2" wrap>
         <Button
           disabled={!team.trim()}
