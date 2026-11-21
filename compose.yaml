@@ -2,6 +2,13 @@ services:
   frontend:
     build:
       context: .
+      labels:
+        org.opencontainers.image.revision: "${GITHUB_SHA:-local}"
     ports:
       - "${FRONTEND_PORT:-8080}:3000"
     restart: unless-stopped
+    volumes:
+      - mcc-stand:/app/.mcc-stand
+      - ./mock/fixtures:/app/mock/fixtures:ro
+volumes:
+  mcc-stand:

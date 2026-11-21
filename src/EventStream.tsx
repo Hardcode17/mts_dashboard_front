@@ -1,7 +1,9 @@
 import {useMemo, useState} from 'react'
 import {Button, Card, Flex, Link, Pagination, Select, Text, TextInput} from '@gravity-ui/uikit'
-import {snapshotTime, type Incident, type ShiftEvent} from './demoData'
+import {type Incident, type ShiftEvent} from './demoData'
 import './EventStream.css'
+import {useWorkspace} from './desk/context'
+import {standNow,moscowTime} from './desk/types'
 
 const eventKinds = {
   new: {label: 'Новый критический', symbol: '!'},
@@ -25,7 +27,6 @@ const numberFormat = new Intl.NumberFormat('ru-RU')
 interface StreamProps {
   incidents: Incident[]
   events: ShiftEvent[]
-  expanded: boolean
 }
 
 function EventRows({events, byKey}: {events: ShiftEvent[]; byKey: Map<string, Incident>}) {
@@ -54,24 +55,30 @@ function EventRows({events, byKey}: {events: ShiftEvent[]; byKey: Map<string, In
   )
 }
 
-function EventJournal({events, byKey}: {events: ShiftEvent[]; byKey: Map<string, Incident>}) {
+export function EventJournal({incidents, events, params, update}: StreamProps & {
+  params: URLSearchParams; update: (changes: Record<string, string>) => void
+}) {
+  const byKey = useMemo(() => new Map(incidents.map(item => [item.key, item])), [incidents])
+  const {desk,now}=useWorkspace()
+  const currentMinute=Math.floor(standNow(desk,now)/60000)
   const [snapshot, setSnapshot] = useState(events)
-  const [query, setQuery] = useState('')
-  const [kind, setKind] = useState('all')
-  const [period, setPeriod] = useState('shift')
-  const [page, setPage] = useState(1)
+  const query = params.get('q') ?? ''
+  const kind = kindOptions.find(option => option.value === params.get('kind'))?.value ?? 'all'
+  const period = periods.find(option => option.value === params.get('period'))?.value ?? 'shift'
   const found = useMemo(() => {
     const term = query.trim().toLocaleLowerCase('ru')
-    const from = period === 'shift' ? 0 : toMinutes(snapshotTime) - Number(period)
+    const from = period === 'shift' ? 0 : toMinutes(moscowTime(currentMinute*60000)) - Number(period)
     return snapshot.filter(event => {
       if (kind !== 'all' && event.kind !== kind) return false
-      if (toMinutes(event.time) < from) return false
+      if(period!=='shift'&&(event.at?event.at<(currentMinute-Number(period))*60000:toMinutes(event.time)<from))return false
       if (!term) return true
       const item = byKey.get(event.key)
       return [item?.id, item?.product, item?.title, event.change, eventKinds[event.kind].label]
         .some(value => value?.toLocaleLowerCase('ru').includes(term))
     })
-  }, [snapshot, byKey, query, kind, period])
+  }, [snapshot, byKey, query, kind, period,currentMinute])
+  const requested = Number(params.get('page'))
+  const page = Number.isSafeInteger(requested) ? Math.max(1, Math.min(Math.ceil(found.length/pageSize), requested)) : 1
   const start = (page - 1) * pageSize
   const changed = snapshot[0]?.id !== events[0]?.id || snapshot.length !== events.length
   return (
@@ -80,35 +87,34 @@ function EventJournal({events, byKey}: {events: ShiftEvent[]; byKey: Map<string,
         <TextInput size="l" type="search" value={query} hasClear
           placeholder="Номер инцидента, продукт или текст события"
           controlProps={{'aria-label': 'Поиск по журналу'}}
-          onUpdate={value => {setQuery(value); setPage(1)}} />
+          onUpdate={q => update({q, page: ''})} />
         <Select size="l" aria-label="Тип события" value={[kind]} options={kindOptions}
-          onUpdate={values => {setKind(values[0] ?? 'all'); setPage(1)}}/>
+          onUpdate={([value]) => update({kind: value === 'all' ? '' : value, page: ''})}/>
         <Select size="l" aria-label="Период журнала" value={[period]} options={periods}
-          onUpdate={values => {setPeriod(values[0] ?? 'shift'); setPage(1)}}/>
+          onUpdate={([value]) => update({period: value === 'shift' ? '' : value, page: ''})}/>
       </div>
       <Flex className="shift-stream-status" justifyContent="space-between" alignItems="center" gap="spacing-3" wrap="wrap">
         <Text role="status" color="secondary">
           Найдено событий: {numberFormat.format(found.length)}
           {found.length > 0 && <> · {numberFormat.format(start + 1)}–{numberFormat.format(Math.min(start + pageSize, found.length))}</>}
         </Text>
-        {changed && <Button view="outlined" onClick={() => {setSnapshot(events); setPage(1)}}>Показать обновления</Button>}
+        {changed && <Button view="outlined" onClick={() => {setSnapshot(events); update({page: ''})}}>Показать обновления</Button>}
       </Flex>
       {found.length > 0 ? <>
         <EventRows events={found.slice(start, start + pageSize)} byKey={byKey}/>
         {found.length > pageSize && <nav className="shift-stream-pagination" aria-label="Страницы журнала">
-          <Pagination compact showInput page={page} pageSize={pageSize} total={found.length} onUpdate={setPage}/>
+          <Pagination compact showInput page={page} pageSize={pageSize} total={found.length} onUpdate={n => update({page: String(n)})}/>
         </nav>}
       </> : <Flex className="shift-stream-empty" direction="column" alignItems="flex-start" gap="spacing-2">
         <Text variant="subheader-2">{snapshot.length ? 'Совпадений нет' : 'В журнале пока нет событий'}</Text>
-        {(query || kind !== 'all' || period !== 'shift') && <Button view="flat" onClick={() => {setQuery(''); setKind('all'); setPeriod('shift'); setPage(1)}}>Сбросить поиск и фильтр</Button>}
+        {(query || kind !== 'all' || period !== 'shift') && <Button view="flat" onClick={() => update({q: '', kind: '', period: '', page: ''})}>Сбросить поиск и фильтр</Button>}
       </Flex>}
     </Card>
   )
 }
 
-export function EventStream({incidents, events, expanded}: StreamProps) {
+export function EventStream({incidents, events}: StreamProps) {
   const byKey = useMemo(() => new Map(incidents.map(item => [item.key, item])), [incidents])
-  if (expanded) return <EventJournal events={events} byKey={byKey}/>
   return (
     <Card className="mcc-glass shift-stream shift-stream--compact">
       <Flex className="shift-stream-heading" justifyContent="space-between" alignItems="baseline" gap="spacing-2">

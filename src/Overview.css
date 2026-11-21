@@ -11,7 +11,7 @@
 .overview-nav, .overview-log { gap: var(--g-spacing-3); }
 .overview-definitions { gap: var(--g-spacing-2); }
 .overview-work .overview-nav-tile, .overview-work .overview-nav-log {
-  background: var(--mcc-rail-fill);
+  background: var(--mcc-surface);
   border: 1px solid transparent;
   border-radius: var(--g-border-radius-xl);
 }
@@ -55,7 +55,7 @@
   padding: var(--g-spacing-4);
   color: var(--g-color-text-primary);
 }
-.overview-work .overview-nav-log[aria-current="page"] { border-color: var(--mcc-glass-edge); background: var(--g-color-base-selection); }
+.overview-work .overview-nav-log[aria-current="page"] { border-color: var(--mcc-hairline); background: var(--g-color-base-selection); }
 .overview-table-panel { min-width: 0; }
 .overview-table-toolbar { display: grid; gap: var(--g-spacing-4); padding: var(--g-spacing-5);  }
 .overview-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--g-spacing-3); }
@@ -122,3 +122,13 @@
   .overview-table-scroll { max-height: 27rem; }
   .overview-pagination { flex-wrap: wrap; gap: var(--g-spacing-1); }
 }
+
+.overview-incident-list { margin: 0; padding: 0; list-style: none; }
+.overview-incident-list li + li { border-block-start: 1px solid var(--mcc-hairline); }
+.overview-incident-list a {
+  display: grid;
+  gap: var(--g-spacing-1);
+  padding: var(--g-spacing-3) var(--g-spacing-4);
+  overflow-wrap: anywhere;
+}
+.overview-incident-list .overview-cell { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--g-spacing-2); }
