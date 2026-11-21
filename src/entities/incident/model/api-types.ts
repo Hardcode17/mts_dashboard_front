@@ -33,6 +33,8 @@ export interface IncidentDto {
   stateEnum: IncidentState
   priorityId: number
   assignedGroupName: string | null
+  solution?: string | null
+  assignedEmployeeLogin?: string | null
   assignedEmployee: string | null
   deadline: string | null
   remainingSeconds: number | null
@@ -95,6 +97,16 @@ export interface IncidentDetailResponse {
   itsmUrl: string
   itsmDemo: boolean
   meetingUrl: string | null
+}
+
+export interface SimilarIncidentsResponse {
+  incidentId: string
+  candidates: {
+    incidentId: string
+    header: string | null
+    score: number
+    reasons: string[]
+  }[]
 }
 
 export interface IncidentRelationshipNode {

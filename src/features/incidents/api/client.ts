@@ -6,6 +6,7 @@ import type {
   IncidentNumber,
   IncidentRelationshipsResponse,
   SnapshotStatus,
+  SimilarIncidentsResponse,
 } from '../../../entities/incident/model/api-types.ts'
 import type {
   DashboardIdentity,
@@ -42,6 +43,8 @@ function mapIncident(summary: DashboardIncidentSummary, detail?: DashboardIncide
     priorityId: summary.priorityId,
     assignedGroupName: summary.assignedGroupName ?? null,
     assignedEmployee: detail?.assignedEmployee ?? null,
+    assignedEmployeeLogin: detail?.assignedEmployeeLogin,
+    solution: detail?.solution,
     deadline: summary.deadline,
     remainingSeconds: detail?.remainingSeconds ?? null,
     overdue: detail?.overdue ?? false,
@@ -101,6 +104,10 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
         itsmDemo: card.itsmDemo,
         meetingUrl: null,
       }
+    },
+
+    getSimilar(number: IncidentNumber, signal?: AbortSignal) {
+      return request<SimilarIncidentsResponse>(listPath + '/' + encodeURIComponent(number) + '/similar', {}, signal)
     },
 
     getIncidentRelationships(

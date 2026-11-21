@@ -63,6 +63,7 @@ export function DashboardAuth({children}: {children: ReactNode}) {
       setDashboardAccessToken(undefined)
       setSession({identity: null})
     }
+    window.addEventListener('mcc-session-expired', expire)
     const removeLoaded = auth.events.addUserLoaded(user => setDashboardAccessToken(user.access_token))
     const removeExpired = auth.events.addAccessTokenExpired(expire)
     const removeUnloaded = auth.events.addUserUnloaded(expire)
@@ -75,6 +76,7 @@ export function DashboardAuth({children}: {children: ReactNode}) {
     })
     return () => {
       mounted = false
+      window.removeEventListener('mcc-session-expired', expire)
       removeLoaded()
       removeExpired()
       removeUnloaded()

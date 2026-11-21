@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData'
+import type {Incident} from '../demoData.ts'
 import {active, dueInstant} from './types.ts'
 
 export function registrationTime(item: Incident) {

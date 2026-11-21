@@ -35,6 +35,8 @@ export function toIncident(dto: IncidentDto): Incident {
     service: dto.service ?? '',
     team: dto.assignedGroupName ?? '',
     assignee: dto.assignedEmployee ?? undefined,
+    assigneeLogin: dto.assignedEmployeeLogin ?? undefined,
+    solution: dto.solution ?? undefined,
     state,
     registered: displayTime(dto.submitDate),
     registeredAt,

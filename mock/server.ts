@@ -3,23 +3,40 @@ import {DatabaseSync} from 'node:sqlite'
 import {mkdirSync, readFileSync, statSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {IncomingMessage, ServerResponse} from 'node:http'
+import {groupModelWorker} from './groupModel.ts'
+import {livePublication} from './livePublication.ts'
+import {localOfficial} from './localOfficial.ts'
+import {handleFixtureRelationships} from './relationships.ts'
+import {pendingGroupReviews, applyGroupReview, reconcileGroups} from './incidentGroups.ts'
+import {sampleMonitorHistory} from './monitorHistory.ts'
 import {shopStand} from './shop.ts'
-import {applySnapshot, createDesk, execute, tickDesk} from './engine.ts'
-import {initialIncidents} from '../src/demoData.ts'
-import type {Desk, Command, Source} from '../src/desk/types.ts'
+import {applyCard, applySnapshot, createDesk, dispatchTasks, execute, items, lookup, tickDesk} from './engine.ts'
+import {itsmGateway, ItsmError, mergeConfirmation} from './itsm.ts'
+import {requireWorkspaceUser, workspaceAuthSettings} from './workspaceAuth.ts'
+import {coordinatorGroup, type Desk, type Command, type Source} from '../src/desk/types.ts'
+
+const liveCommands = new Set<Command['type']>([
+  'ack', 'available', 'accept', 'handoff', 'link', 'unlink', 'note', 'toggleNote', 'threshold',
+  'report', 'preset', 'removePreset', 'analyze', 'advisor', 'groupClaim', 'groupAdd', 'groupExclude',
+])
+
+export function liveWorkspaceService(backend: string, directory = process.env.MCC_STATE_DIR || resolve('.mcc-workspace')) {
+  const origin = new URL(backend).origin
+  return mockService(directory, '', {dashboard: origin}, {
+    ...workspaceAuthSettings(), profileUrl: origin + '/api/me',
+  }, origin)
+}
 
 export function mockService(
   directory = process.env.MCC_STATE_DIR || resolve('.mcc-stand'),
   file = process.env.MCC_SOURCE_FILE || resolve('mock/fixtures/incidents.json'),
+  external: Parameters<typeof itsmGateway>[0] = {itsm: process.env.MCC_ITSM_URL, dashboard: process.env.MCC_DASHBOARD_URL},
+  auth = workspaceAuthSettings(),
+  liveBackend?: string,
 ) {
-  const relationshipEdges = JSON.parse(
-    readFileSync(
-      process.env.MCC_RELATIONSHIPS_FILE || resolve('mock/fixtures/incident-relationships.json'),
-      'utf8',
-    ),
-  ) as {parentId: string; childId: string}[]
+  const gateway = itsmGateway(external)
   mkdirSync(directory, {recursive: true})
-  const db = new DatabaseSync(join(directory, 'workspace.sqlite'))
+  const db = new DatabaseSync(join(directory, liveBackend ? 'workspace-live.sqlite' : 'workspace.sqlite'))
   db.exec(
     'PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS workspace (mode TEXT PRIMARY KEY, body TEXT NOT NULL)',
   )
@@ -38,15 +55,17 @@ export function mockService(
   )
   let seenFile = '',
     lastChecked = 0
-  function save(d: Desk, writeCards = true) {
+  function save(d: Desk, writeCards: boolean | string[] = true) {
     const {records, revisions, ...meta} = d
     const version = d.version + 1
     db.exec('BEGIN IMMEDIATE')
     try {
       if (writeCards) {
-        for (const [key, row] of Object.entries(records)) cardWrite.run(d.mode, key, JSON.stringify(row))
-        for (const [key, history] of Object.entries(revisions))
-          revisionWrite.run(d.mode, key, JSON.stringify(history))
+        for (const key of Array.isArray(writeCards) ? writeCards : Object.keys(records))
+          cardWrite.run(d.mode, key, JSON.stringify(records[key]))
+        for (const key of Array.isArray(writeCards) ? writeCards : Object.keys(revisions)) {
+          if (revisions[key]) revisionWrite.run(d.mode, key, JSON.stringify(revisions[key]))
+        }
       }
       write.run(d.mode, JSON.stringify({...meta, version}))
       db.exec('COMMIT')
@@ -57,9 +76,15 @@ export function mockService(
     d.version = version
     desks.set(d.mode, d)
   }
-  for (const mode of ['case', 'volume'] as const) {
+  const modes: Source[] = liveBackend ? ['case'] : ['case', 'volume']
+  for (const mode of modes) {
     const row = db.prepare('SELECT body FROM workspace WHERE mode=?').get(mode)
     const d: Desk = row ? JSON.parse(String(row.body)) : createDesk(mode, Date.now())
+    if (liveBackend && !row) {
+      d.people = []
+      d.enabled = []
+      d.apiBeforeFirstSuccess = true
+    }
     const readRows = (table: 'incident' | 'revisions') =>
       Object.fromEntries(
         db
@@ -70,10 +95,18 @@ export function mockService(
     const legacy = row && d.records !== undefined
     d.records ??= readRows('incident')
     d.revisions ??= readRows('revisions')
+    const withoutGroups = !d.outageGroups
+    if (withoutGroups) reconcileGroups(d,items(d),Date.now())
     desks.set(mode, d)
-    if (!row || legacy) save(d)
+    if (!row || legacy || withoutGroups) save(d)
   }
+  const live = liveBackend && gateway
+    ? livePublication(liveBackend, gateway, () => desks.get('case')!, save)
+    : null
+  const official = localOfficial(desks, save)
+  const prefix = live ? '/api/workspace/' : '/api/stand/'
   function pollFile() {
+    if (live) return
     const d = desks.get('case')!
     if (d.input !== 'file') return
     const now = Date.now()
@@ -105,12 +138,23 @@ export function mockService(
       }
     }
   }
-  const shop = shopStand()
+  const shop = live ? null : shopStand()
   pollFile()
+  const groupReviewer = groupModelWorker(
+    mode => desks.has(mode) ? pendingGroupReviews(desks.get(mode)!) : [],
+    (mode, candidate, verdict) => {
+      const next = structuredClone(desks.get(mode)!)
+      if (applyGroupReview(next, candidate, verdict, Date.now(), items(next))) save(next, false)
+    },
+  )
   const timer = setInterval(() => {
     const now = Date.now()
     pollFile()
-    for (const d of desks.values()) if (tickDesk(d, now)) save(d, false)
+    for (const d of desks.values()) {
+      const ticked = tickDesk(d, now)
+      if (sampleMonitorHistory(d, () => items(d), now) || ticked) save(d, false)
+    }
+    void groupReviewer.check()
   }, 1000)
   timer.unref()
   const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -119,218 +163,82 @@ export function mockService(
   }
   async function handle(req: IncomingMessage, res: ServerResponse, next: () => void) {
     const url = new URL(req.url ?? '/', 'http://stand.local')
-    const apiDesk = () => desks.get('case')!
-    const stateEnum = (item: Desk['records'][string]) => {
-      if (item.research) return 'Research'
-      if (item.state === 'Завершён' || item.state === 'Завершен') return 'Resolved'
-      if (item.state === 'Закрыт') return 'Closed'
-      if (item.state === 'Выполняется' || item.state === 'В работе') return 'WorkInProgress'
-      return 'Assigned'
+    if (!live && req.method === 'GET' && url.pathname === '/auth/config') {
+      return send(res, 200, {url: auth.url, realm: auth.realm, clientId: auth.clientId})
     }
-    const groupRules = {
-      critical: ['Критические', 'Активный инцидент с приоритетом 4'],
-      coordinator: ['На координаторах', 'Назначен координаторам'],
-      high: ['Высокий приоритет', 'Активный инцидент с приоритетом 3'],
-      research: ['Исследование ситуации', 'Сбой устранён, причины исследуются'],
-    } as const
-    type Group = keyof typeof groupRules
-    const apiGroups = (item: Desk['records'][string]) => {
-      const state = stateEnum(item)
-      const active = state === 'Assigned' || state === 'WorkInProgress'
-      const groups: Group[] = []
-      if (active && item.priority === 4) groups.push('critical')
-      if ((active || state === 'Research') && item.team === 'КЦ ИТ Координаторы Массовых Инцидентов') {
-        groups.push('coordinator')
-      }
-      if (active && item.priority === 3) groups.push('high')
-      if (state === 'Research') groups.push('research')
-      return groups
-    }
-    const isoDate = (value?: number | null) => value == null ? null : new Date(value).toISOString()
-    const apiIncident = (item: Desk['records'][string]) => ({
-      id: item.id,
-      productName: item.product || null,
-      assignedGroupName: item.team || null,
-      stateEnum: stateEnum(item),
-      priorityId: item.priority,
-      submitDate: new Date(item.registeredAt ?? apiDesk().started).toISOString(),
-      deadline: isoDate(item.dueAt),
-      completionDate: isoDate(item.restoredEpoch),
-      groupMemberships: apiGroups(item).map(group => ({group, matchedRule: groupRules[group][1]})),
-    })
-
-    if (req.method === 'GET' && url.pathname === '/api/dashboard/incidents') {
-      const d = apiDesk()
-      const groupKeys = Object.keys(groupRules) as Group[]
-      const selected = url.searchParams.getAll('group')
-      if (selected.some(group => !Object.hasOwn(groupRules, group))) {
-        return send(res, 400, {code: 'INVALID_GROUP', message: 'Неизвестная группа'})
-      }
-      const includeCompleted = url.searchParams.get('includeCompleted') === 'true'
-      const revision = d.lastImport ? d.version : 0
-      const requestedCursor = url.searchParams.get('cursor')
-      const limit = Number(url.searchParams.get('limit') ?? 50)
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-        return send(res, 400, {code: 'INVALID_LIMIT', message: 'Недопустимый размер страницы'})
-      }
-      const signature = JSON.stringify([revision, selected, includeCompleted, limit])
-      const cursorPrefix = Buffer.from(signature).toString('base64url') + '.'
-      const start = requestedCursor ? Number(requestedCursor.slice(cursorPrefix.length)) : 0
-      if (requestedCursor && (!requestedCursor.startsWith(cursorPrefix) || !Number.isSafeInteger(start) || start < 1)) {
-        return send(res, 400, {code: 'INVALID_CURSOR', message: 'Снимок или параметры изменились'})
-      }
-      const etag = '"' + createHash('sha256').update(signature + ':' + start).digest('hex') + '"'
-      res.setHeader('ETag', etag)
-      if (req.headers['if-none-match'] === etag) {
-        res.writeHead(304)
-        res.end()
-        return
-      }
-      const rows = Object.values(d.records)
-        .filter(item => !item.absent && (includeCompleted || !['Resolved', 'Closed'].includes(stateEnum(item))))
-        .sort((first, second) =>
-          (second.updatedAt ?? second.registeredAt ?? 0) - (first.updatedAt ?? first.registeredAt ?? 0) ||
-          first.id.localeCompare(second.id))
-        .map(apiIncident)
-        .filter(item => !selected.length || item.groupMemberships.some(({group}) => selected.includes(group)))
-      const items = rows.slice(start, start + limit)
-      const groups = start || !d.lastImport ? [] : groupKeys.map(key => {
-        const included = selected.length === 0 || selected.includes(key)
-        const inGroup = (item: ReturnType<typeof apiIncident>) => item.groupMemberships.some(membership => membership.group === key)
-        return {
-          key,
-          title: groupRules[key][0],
-          rule: groupRules[key][1],
-          active: key !== 'research',
-          incidentCount: included ? rows.filter(inGroup).length : 0,
-          incidents: included ? items.filter(inGroup) : [],
-          fixed: null,
-        }
-      })
-      return send(res, 200, {
-        revision,
-        eventSeq: revision,
-        beforeFirstSuccess: !d.lastImport,
-        groups,
-        items,
-        nextCursor: start + limit < rows.length ? cursorPrefix + String(start + limit) : null,
-      })
-    }
-    if (req.method === 'GET' && url.pathname === '/api/dashboard/monitoring/summary') {
-      const desk = apiDesk()
-      const counts = {critical: 0, high: 0, coordinators: 0, research: 0}
-      const priorities = new Map<number, number>()
-      const loads = new Map<string, number>()
-      let activeCount = 0
-      for (const incident of Object.values(desk.records)) {
-        if (incident.absent) continue
-        const groups = apiGroups(incident)
-        for (const group of groups) counts[group === 'coordinator' ? 'coordinators' : group] += 1
-        if (!['Assigned', 'WorkInProgress'].includes(stateEnum(incident))) continue
-        activeCount += 1
-        priorities.set(incident.priority, (priorities.get(incident.priority) ?? 0) + 1)
-        if (groups.includes('coordinator') && incident.assignee) {
-          loads.set(incident.assignee, (loads.get(incident.assignee) ?? 0) + 1)
-        }
-      }
-      return send(res, 200, {
-        updatedAt: desk.lastImport ? new Date(desk.lastImport).toISOString() : null,
-        activeCount,
-        counts,
-        timeline: [],
-        priorities: [...priorities].map(([priorityId, count]) => ({priorityId, count})),
-        coordinatorLoad: [...loads].map(([name, count]) => ({name, count})),
-      })
-    }
-    if (req.method === 'GET' && url.pathname === '/api/snapshot/status') {
-      const d = apiDesk()
-      const lastSuccessAt = d.lastImport ? new Date(d.lastImport).toISOString() : null
-      const lastReceivedAt = lastChecked
-        ? new Date(lastChecked).toISOString()
-        : lastSuccessAt
-      return send(res, 200, {
-        lastReceivedAt,
-        lastSuccessAt,
-        revision: lastSuccessAt ? d.version : null,
-        stale: Boolean(d.sourceError || !lastSuccessAt),
-      })
-    }
-    const relationshipPath = url.pathname.match(
-      /^\/api\/incidents\/([^/]+)\/relationships$/,
-    )
-    if (req.method === 'GET' && relationshipPath) {
-      const number = decodeURIComponent(relationshipPath[1])
-      // The API source reads the case snapshot, while the dashboard can open a
-      // generated volume card. Resolve both so the read-only graph stays local
-      // and shows the empty state instead of a misleading 404.
-      const records = [
-        ...Object.values(apiDesk().records),
-        ...Object.values(desks.get('volume')!.records),
-        ...initialIncidents,
-      ]
-      const findRecord = (id: string) =>
-        records.find((record) => record.id === id && !record.absent)
-      const item = findRecord(number)
-      if (!item) {
-        return send(res, 404, {
-          code: 'RESOURCE_NOT_FOUND',
-          message: `Resource with id ${number} not found`,
-        })
-      }
-      const edges = relationshipEdges.filter(
-        (edge) => edge.parentId === number || edge.childId === number,
-      )
-      const ids = [...new Set([number, ...edges.flatMap((edge) => [edge.parentId, edge.childId])])]
-      const nodes = ids.map((id) => {
-        const record = findRecord(id)
-        return record
-          ? {id, title: record.title, stateEnum: stateEnum(record), priorityId: record.priority}
-          : {id, title: null, stateEnum: null, priorityId: null}
-      })
-      return send(res, 200, {focusId: number, nodes, edges})
-    }
-    const incidentPath = url.pathname.match(/^\/api\/dashboard\/incidents\/([^/]+)$/)
-    if (req.method === 'GET' && incidentPath) {
-      const number = decodeURIComponent(incidentPath[1])
-      const item = Object.values(apiDesk().records).find(record => record.id === number && !record.absent)
-      if (!item) return send(res, 404, {code: 'RESOURCE_NOT_FOUND', message: `Resource with id ${number} not found`})
-      const summary = apiIncident(item)
-      const isActive = summary.stateEnum === 'Assigned' || summary.stateEnum === 'WorkInProgress'
-      const due = isActive ? item.dueAt : null
-      const now = Date.now()
-      return send(res, 200, {
-        ...summary,
-        eventSeq: apiDesk().version,
-        revision: apiDesk().version,
-        header: item.title,
-        description: item.description ?? null,
-        service: item.service || null,
-        serviceType: item.serviceType || null,
-        assignedEmployee: item.assignee ?? null,
-        remainingSeconds: due == null ? null : Math.floor((due - now) / 1000),
-        overdue: due != null && now > due,
-        itsmUrl: new URL('/#itsm/' + encodeURIComponent(item.key), 'http://' + req.headers.host).href,
-        itsmDemo: true,
-      })
-    }
-
-    if (!url.pathname.startsWith('/api/stand/')) return next()
-    const mode = url.searchParams.get('mode') ?? 'volume'
-    if (mode !== 'case' && mode !== 'volume') return send(res, 400, {error: 'Неизвестный источник'})
+    if (url.pathname !== '/api' && !url.pathname.startsWith('/api/')) return next()
+    const profile = await requireWorkspaceUser(req, res, auth.profileUrl)
+    if (!profile) return
+    if (!live && !gateway && await official(req, res, url)) return
+    if (!live && handleFixtureRelationships(req, res, desks, lastChecked)) return
+    if (!url.pathname.startsWith(prefix)) return send(res, 404, {error: 'Неизвестный маршрут API.'})
+    const mode = url.searchParams.get('mode') ?? (live ? 'case' : 'volume')
+    if ((mode !== 'case' && mode !== 'volume') || !desks.has(mode)) return send(res, 400, {error: 'Неизвестный источник'})
+    const operation = url.pathname.slice(prefix.length)
     const current = () => desks.get(mode)!
     try {
-      if (req.method === 'GET' && url.pathname === '/api/stand/snapshot') {
+      if (live) {
+        if (!['snapshot', 'action', 'itsm'].includes(operation)) return send(res, 404, {error: 'Неизвестный маршрут API.'})
+        await live.refresh(req.headers)
+        const desk = current()
+        if (desk.apiBeforeFirstSuccess && operation !== 'snapshot')
+          return send(res, 503, {error: 'Ожидаем первую публикацию Spring.'})
+        const person = desk.people.find(p => p.id === profile.id)
+        if (!person || person.name !== profile.name) {
+          const next = structuredClone(desk)
+          if (person) next.people.find(p => p.id === profile.id)!.name = profile.name
+          else next.people.push({id: profile.id, name: profile.name, group: coordinatorGroup, available: true, generation: 1})
+          dispatchTasks(next, Date.now())
+          save(next, false)
+        }
+      }
+      const itsmPath = operation === 'itsm'
+      function knownCard(key: unknown) {
+        const card = typeof key === 'string' ? lookup(current(),key) : undefined
+        if (!card || (live && card.absent)) throw new ItsmError(404,'Карточка не найдена в рабочем месте.')
+        return card
+      }
+      async function externalEdit(key: unknown, changes: unknown, expected: unknown, handoff?: Command) {
+        if (!gateway) throw new ItsmError(503,'Внешняя ITSM не подключена.')
+        const item = knownCard(key)
+        return gateway.serial(item.id,async()=>{
+          const before=knownCard(key)
+          if (typeof expected !== 'number' || expected !== (before.updatedAt ?? 0))
+            throw new ItsmError(409,'Карточка уже изменилась. Перечитайте данные перед сохранением.')
+          if (handoff) execute(structuredClone(current()),handoff,Date.now())
+          const card=await gateway.patch(before,changes,req.headers)
+          live?.invalidate()
+          // An unrelated poll or another INC may have changed while ITSM was answering.
+          const d=structuredClone(current()), previous=lookup(d,item.key)!
+          const confirmed=mergeConfirmation(before,previous,card,changes)
+          const now=Date.now()
+          applyCard(d,confirmed,now)
+          dispatchTasks(d,now)
+          save(d)
+          return {id:item.id,team:confirmed.team,assignee:confirmed.assignee??null,state:confirmed.state}
+        })
+      }
+      if (req.method === 'GET' && itsmPath) {
+        if (!gateway) return send(res,200,{external:false})
+        const item = knownCard(url.searchParams.get('key'))
+        return send(res,200,{...await gateway.editor(item,req.headers),expected:item.updatedAt??0})
+      }
+      if (req.method === 'GET' && operation === 'snapshot') {
         const d = current()
         return send(res, 200, {
           version: d.version,
-          checked: mode === 'case' && d.input === 'file' ? lastChecked : Date.now(),
+          itsmExternal: Boolean(gateway),
+          ...(live && {person: profile.id}),
+          checked: live ? live.checked : mode === 'case' && d.input === 'file' ? lastChecked : Date.now(),
           now: Date.now(),
-          desk: url.searchParams.get('since') === String(d.version) ? null : d,
+          desk: url.searchParams.get('since') === String(d.version) ? null : live && d.apiBeforeFirstSuccess
+            ? {...createDesk('case', d.started), version: d.version, people: d.people, enabled: [], apiBeforeFirstSuccess: true, sourceError: d.sourceError}
+            : d,
         })
       }
       if (
-        req.method === 'POST' &&
-        (url.pathname === '/api/stand/action' || url.pathname === '/api/stand/shop')
+        (req.method === 'POST' && (operation === 'action' || operation === 'shop')) ||
+        (req.method === 'PATCH' && itsmPath)
       ) {
         if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
           return send(res, 403, {error: 'Источник запроса не совпадает'})
@@ -344,8 +252,9 @@ export function mockService(
           parts.push(Buffer.from(chunk))
         }
         const body = JSON.parse(Buffer.concat(parts).toString('utf8'))
-        if (url.pathname === '/api/stand/shop') {
-          if (mode !== 'volume') throw Error('Демомагазин работает на наборе большой смены.')
+        if (itsmPath) return send(res,200,await externalEdit(url.searchParams.get('key'),body?.changes,body?.expected))
+        if (operation === 'shop') {
+          if (!shop || mode !== 'volume') throw Error('Демомагазин работает на наборе большой смены.')
           if (body.type === 'start') {
             const w = current().work.incident
             if (w?.telemetryOffline) throw Error('Нет свежих измерений.')
@@ -366,36 +275,45 @@ export function mockService(
           }
           throw Error('Неизвестная операция магазина.')
         }
-        const cmd = body as Command
-        if (!cmd || typeof cmd.type !== 'string') throw Error('Нет действия')
+        if (!body || typeof body !== 'object' || typeof body.type !== 'string') throw Error('Нет действия')
+        if (live && !liveCommands.has(body.type)) return send(res, 400, {error: 'Действие недоступно для рабочего источника.'})
+        const cmd: Command = live ? {...body, person: profile.id} : body
         const now = Date.now()
         if ((cmd.type === 'upload' || cmd.type === 'watchFile') && mode !== 'case')
           throw Error('Выберите источник «Кейс МТС».')
-        const d = structuredClone(current())
-        execute(d, cmd, now)
-        if (cmd.type === 'watchFile') delete d.fileDigest
-        save(d, ['edit', 'upload', 'handoff', 'wifi', 'demo'].includes(cmd.type))
+        if (gateway && cmd.type === 'edit') throw new ItsmError(400,'Сохраните изменение через форму «Изменить в ITSM».')
+        if (gateway && cmd.type === 'handoff') {
+          await externalEdit(cmd.key,{assignedGroupName:cmd.value},cmd.expected,cmd)
+        } else {
+          const d = structuredClone(current())
+          execute(d, cmd, now)
+          if (cmd.type === 'watchFile') delete d.fileDigest
+          save(d, ['edit', 'upload', 'handoff', 'wifi', 'demo'].includes(cmd.type))
+        }
         if (cmd.type === 'watchFile') {
           seenFile = ''
           pollFile()
         }
         return send(res, 200, {
           desk: current(),
+          ...(live && {person: profile.id}),
           version: current().version,
           now,
-          checked: mode === 'case' && current().input === 'file' ? lastChecked : now,
+          checked: live ? live.checked : mode === 'case' && current().input === 'file' ? lastChecked : now,
         })
       }
       send(res, 404, {error: 'Метод стенда не найден'})
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Ошибка запроса'
-      send(res, /устарело|изменилась|другому дежурному/.test(message) ? 409 : 400, {error: message})
+      send(res, e instanceof ItsmError ? e.status : /устарело|изменилась|другому дежурному/.test(message) ? 409 : 400, {error: message})
     }
   }
   return {
     handle,
     close() {
       clearInterval(timer)
+      live?.close()
+      groupReviewer.close()
       db.close()
     },
   }

@@ -8,6 +8,7 @@ import {join} from 'node:path'
 import {chromium, expect} from '@playwright/test'
 import serve from 'serve-handler'
 import {mockService} from '../mock/server.ts'
+import {identityFixture} from './support/identity.mjs'
 
 const incidents = {
   'INC-CHILD': {
@@ -115,11 +116,16 @@ function detail(id) {
 }
 
 async function stand(t) {
+  const identity = await identityFixture(t)
+  const directory = await mkdtemp(join(tmpdir(), 'mcc-relationships-browser-'))
+  const mock = mockService(directory, undefined, {}, identity.settings)
   const server = createServer((request, response) =>
-    serve(request, response, {
-      public: 'dist',
-      rewrites: [{source: '**', destination: '/index.html'}],
-    }),
+    mock.handle(request, response, () =>
+      serve(request, response, {
+        public: 'dist',
+        rewrites: [{source: '**', destination: '/index.html'}],
+      }),
+    ),
   )
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const root = `http://127.0.0.1:${server.address().port}`
@@ -132,6 +138,8 @@ async function stand(t) {
   t.after(async () => {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
+    mock.close()
+    await rm(directory, {recursive: true, force: true})
     assert.deepEqual(errors, [])
   })
 
@@ -145,6 +153,7 @@ async function stand(t) {
     page.setDefaultTimeout(8000)
     let errorAttempts = 0
     await page.route(/\/api\/(?:dashboard\/)?incidents\//, async (route) => {
+      assert.equal(await route.request().headerValue('authorization'), 'Bearer ' + identity.getAccessToken())
       const path = new URL(route.request().url()).pathname
       const relationshipMatch = path.match(
         /^\/api\/incidents\/([^/]+)\/relationships$/,
@@ -258,7 +267,8 @@ test('the graph labels direction and selection, then keyboard navigation refocus
 
 test('the dashboard hash detail shows the graph and keeps navigation on the canonical route', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'mcc-relationships-browser-'))
-  const mock = mockService(directory)
+  const identity = await identityFixture(t)
+  const mock = mockService(directory, undefined, {}, identity.settings)
   const server = createServer((request, response) =>
     mock.handle(request, response, () =>
       serve(request, response, {
@@ -305,7 +315,7 @@ test('the dashboard hash detail shows the graph and keeps navigation on the cano
   await parentLink.focus()
   await page.keyboard.press('Enter')
 
-  await page.waitForURL(/\/#incident\/INC000021940033$/)
+  await page.waitForURL(/(?:\/incidents\/INC000021940033\?source=case|\/#incident\/INC000021940033)$/)
   await expect(page.getByRole('heading', {name: 'Аномалия в Магнит'})).toBeVisible()
   await expect(page.getByRole('link', {name: /INC000021938167/})).toBeVisible()
   await expect(page.getByRole('link', {name: /INC000021940779/})).toBeVisible()

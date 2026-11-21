@@ -19,6 +19,8 @@ export interface DashboardIncidentCard extends DashboardIncidentSummary {
   description?: string | null
   service?: string | null
   serviceType?: string | null
+  solution?: string | null
+  assignedEmployeeLogin?: string | null
   assignedEmployee: string | null
   remainingSeconds: number | null
   overdue: boolean

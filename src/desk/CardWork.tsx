@@ -2,76 +2,51 @@ import {useMemo, useState} from 'react'
 import {Button, Card, Checkbox, Flex, Label, Link, Select, Text, TextArea, TextInput} from '@gravity-ui/uikit'
 import type {Incident} from '../demoData'
 import {useWorkspace, useRelated} from './context'
-import {dueInstant, emptyWork, fullTime, priorityNames} from './types'
+import {dueInstant, emptyWork, fullTime, priorityNames, standNow} from './types'
 import {cardTimeline} from './timeline'
+import {cardCoordination, groupHref} from '../control-room/attention'
+import {ItsmEditor} from './ItsmEditor'
 import {RoutingAdvisor} from './RoutingAdvisor'
+import {usesRealBackend} from '../shared/api/mode'
+import {SimilarIncidents} from '../features/incidents/ui/SimilarIncidents'
 import {MessageComposer} from './NotificationCenter'
 import '../IncidentView.css'
 
-export function Collaboration({item, incidents}: {item: Incident; incidents: Incident[]}) {
-  const {desk, act, person} = useWorkspace(),
+export function Collaboration({item, incidents, section}: {item: Incident; incidents: Incident[]; section?: string}) {
+  const {desk, act} = useWorkspace(),
     w = desk.work[item.key] ?? emptyWork()
-  const [note, setNote] = useState(''),
-    [kind, setKind] = useState('Заметка'),
-    [owner, setOwner] = useState(desk.people.find((p) => p.id === person)?.name ?? ''),
-    [due, setDue] = useState('')
-  const candidates = useRelated(item)
+  const requestedKind = new URLSearchParams(location.hash.split('?')[1]).get('kind')
+  const {group} = cardCoordination(desk, item)
+  const candidates = useRelated(item, group?.members)
   const byKey = useMemo(() => new Map(incidents.map((i) => [i.key, i])), [incidents])
   const last = candidates.find((x) => !!x.incident.restoredAt)
-  const next = w.notes.find((n) => !n.done && n.kind === 'Следующий шаг')
-  const summary = [
-    item.id + ' · ' + item.title,
-    'Влияние: ' + (item.impact || item.description || item.title),
-    'Назначение ITSM: ' + item.team,
-    'Срок: ' + (item.due || 'не указан'),
-    'Исполнитель следующего шага: ' + (next?.owner ?? 'уточнить у смены'),
-    'Следующее действие: ' + (next?.text ?? 'согласовать с дежурным') + (next?.due ? ' · к ' + next.due + ' МСК' : ''),
-    'Открытые проверки: ' +
-      (w.notes
-        .filter((n) => !n.done && n.kind === 'Проверка')
-        .map((n) => n.text + ' · ' + n.owner + (n.due ? ' · к ' + n.due + ' МСК' : ''))
-        .join('; ') || 'нет записанных'),
-    'Решение: ' + (item.solution || 'пока не указано'),
-    'Встреча: ' + (w.room?.id ?? 'отсутствует'),
-    'Проверено: ' +
-      (w.notes
-        .filter((n) => n.done)
-        .map((n) => n.text)
-        .join('; ') || 'нет завершённых проверок'),
-    'Последнее исследование: ' +
-      (w.reports.find((r) => r.analysis)?.analysis?.hypothesis ?? 'подтверждённого объяснения пока нет'),
-  ].join('\n')
+  const actions = [
+    {id: 'notes', label: 'Заметки и действия'},
+    {id: 'related', label: usesRealBackend ? 'Похожие случаи в ITSM' : 'Похожие случаи · ' + candidates.length},
+    {id: 'routing', label: 'Кому передать'},
+    {id: 'notify', label: 'Запросить статус'},
+  ]
+  const href = (id: string) => '#incident/' + encodeURIComponent(item.key) + '?section=' + id
   return (
-    <div className="desk-stack">
-      <nav aria-label="Разделы работы смены" className="desk-jumps">
-        {[
-          ['work-links', 'Связи'],
-          ['work-advisor', 'Маршрутизация'],
-          ['work-notes', 'Записи'],
-          ['work-brief', 'Передача смены'],
-          ['work-notify', 'Оповещение'],
-        ].map(([id, title]) => (
-          <Button
-            key={id}
-            size="s"
-            view="outlined"
-            onClick={() => {
-              const section = document.getElementById(id)
-              section?.focus({preventScroll: true})
-              section?.scrollIntoView({block: 'start'})
-            }}
-          >
-            {title}
-          </Button>
+    <div className="incident-work-actions">
+      <nav aria-label="Действия с инцидентом">
+        {actions.map(action => (
+          <Link key={action.id} href={section === action.id ? '#incident/' + encodeURIComponent(item.key) : href(action.id)}
+            aria-expanded={section === action.id}>
+            {action.label}
+          </Link>
         ))}
+        <Link href={'#desk/handover?incident=' + encodeURIComponent(item.key)}>Передача смены</Link>
       </nav>
+      {section === 'related' && (
       <Card id="work-links" tabIndex={-1} className="mcc-glass incident-panel">
         <Flex alignItems="center" gap="spacing-2">
           <Text as="h2" variant="header-1">
-            Связанные инциденты
+            Похожие случаи и связи смены
           </Text>
           <Label>{w.links.length}</Label>
         </Flex>
+        {group && <Link href={groupHref(group.id)}>К ситуации смены · {group.title} · {group.members.length} INC</Link>}
         {w.links.map((k) => (
           <Flex key={k} gap="spacing-2" wrap>
             <Link href={'#incident/' + k}>
@@ -82,10 +57,11 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
             </Button>
           </Flex>
         ))}
+        {usesRealBackend ? <SimilarIncidents key={item.id} number={item.id} /> : <>
         <Text color="secondary">
-          Кандидаты из индекса по сервису, продукту и тексту симптома. Связь подтверждает координатор.
+          {group && group.method !== 'single' ? 'Состав аварии собран в ситуации смены. Ниже — отдельные связи с другими случаями.' : 'Кандидаты из индекса по сервису, продукту и тексту симптома. Связь подтверждает координатор.'}
         </Text>
-        {!candidates.length && <Text>Совпадений по нескольким признакам нет.</Text>}
+        {!candidates.length && (!group || group.method === 'single') && <Text>Совпадений по нескольким признакам нет.</Text>}
         <ul className="desk-list">
           {candidates
             .filter((c) => !w.links.includes(c.incident.key))
@@ -104,11 +80,27 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
               </li>
             ))}
         </ul>
-      </Card>
-      <div id="work-advisor" tabIndex={-1}>
+        </>}
+      </Card>)}
+      {section === 'routing' && <div id="work-advisor" tabIndex={-1}>
         <RoutingAdvisor item={item} past={last?.incident} />
-      </div>
-      <Card id="work-notes" tabIndex={-1} className="mcc-glass incident-panel">
+      </div>}
+      {section === 'notes' && <IncidentNotes key={requestedKind ?? 'note'} item={item} initialKind={requestedKind === 'next' ? 'Следующий шаг' : 'Заметка'}/>}
+      {section === 'notify' && <div id="work-notify" tabIndex={-1}>
+        {usesRealBackend ? <Text color="secondary">Каналы отправки для этого источника пока не подключены.</Text> : <MessageComposer incident={item} />}
+      </div>}
+    </div>
+  )
+}
+function IncidentNotes({item, initialKind}: {item: Incident; initialKind: string}) {
+  const {desk, act, person} = useWorkspace()
+  const w = desk.work[item.key] ?? emptyWork()
+  const [note, setNote] = useState('')
+  const [kind, setKind] = useState(initialKind)
+  const [owner, setOwner] = useState(desk.people.find(p => p.id === person)?.name ?? '')
+  const [due, setDue] = useState('')
+  return (
+    <Card id="work-notes" tabIndex={-1} className="mcc-glass incident-panel">
         <Text as="h2" variant="header-1">
           Заметки и действия
         </Text>
@@ -156,13 +148,43 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
                 </Checkbox>
               )}
               <Text color="secondary">
-                {n.kind} · {n.owner} · {fullTime(n.at)} {n.due ? '· к ' + n.due : ''}
+                {n.kind} · {n.owner} · {fullTime(standNow(desk, n.at))} {n.due ? '· к ' + n.due : ''}
               </Text>
             </li>
           ))}
         </ul>
       </Card>
-      <Card id="work-brief" tabIndex={-1} className="mcc-glass incident-panel">
+  )
+}
+export function IncidentHandover({item}: {item: Incident}) {
+  const {desk, act} = useWorkspace()
+  const w = desk.work[item.key] ?? emptyWork()
+  const next = w.notes.find((n) => !n.done && n.kind === 'Следующий шаг')
+  const summary = [
+    item.id + ' · ' + item.title,
+    'Влияние: ' + (item.impact || item.description || item.title),
+    'Назначение ITSM: ' + item.team,
+    'Срок: ' + (item.due || 'не указан'),
+    'Исполнитель следующего шага: ' + (next?.owner ?? 'уточнить у смены'),
+    'Следующее действие: ' + (next?.text ?? 'согласовать с дежурным') + (next?.due ? ' · к ' + next.due + ' МСК' : ''),
+    'Открытые проверки: ' +
+      (w.notes
+        .filter((n) => !n.done && n.kind === 'Проверка')
+        .map((n) => n.text + ' · ' + n.owner + (n.due ? ' · к ' + n.due + ' МСК' : ''))
+        .join('; ') || 'нет записанных'),
+    'Решение: ' + (item.solution || 'пока не указано'),
+    'Встреча: ' + (w.room?.id ?? 'отсутствует'),
+    'Проверено: ' +
+      (w.notes
+        .filter((n) => n.done)
+        .map((n) => n.text)
+        .join('; ') || 'нет завершённых проверок'),
+    'Последнее исследование: ' +
+      (w.reports.find((r) => r.analysis)?.analysis?.hypothesis ?? 'подтверждённого объяснения пока нет'),
+  ].join('\n')
+  return (
+    <Card id="work-brief" tabIndex={-1} className="mcc-glass incident-panel">
+        <Link href={'#incident/' + encodeURIComponent(item.key)}>← {item.id} · {item.title}</Link>
         <Text as="h2" variant="header-1">
           Передача смены и постмортем
         </Text>
@@ -194,10 +216,10 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
             Подготовить черновик разбора
           </Button>
         </Flex>
-        {w.reports.map((r) => (
+        {w.reports.filter(r => ['Передача смены', 'Черновик постмортема'].includes(r.title)).map((r) => (
           <details key={r.id}>
             <summary>
-              {r.title} · {fullTime(r.at)}
+              {r.title} · {fullTime(standNow(desk,r.at))}
             </summary>
             <div className="mcc-disclosure-body">
               <p className="report-text">{r.content}</p>
@@ -209,13 +231,9 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
           </details>
         ))}
       </Card>
-      <div id="work-notify" tabIndex={-1}>
-        <MessageComposer incident={item} />
-      </div>
-    </div>
   )
 }
-export function Meeting({item}: {item: Incident}) {
+export function Meeting({item, manage = false}: {item: Incident; manage?: boolean}) {
   const {desk, act, person} = useWorkspace(),
     room = desk.work[item.key]?.room
   const [invite, setInvite] = useState(''),
@@ -227,7 +245,7 @@ export function Meeting({item}: {item: Incident}) {
           Аварийная комната
         </Text>
         <Text>К этой карточке встреча ещё не привязана.</Text>
-        <Button onClick={() => void act({type: 'room', key: item.key, person})}>Открыть демовстречу</Button>
+        {manage && <Button onClick={() => void act({type: 'room', key: item.key, person})}>Создать демовстречу</Button>}
       </Card>
     )
   return (
@@ -238,7 +256,7 @@ export function Meeting({item}: {item: Incident}) {
         </Text>
         <Label theme={room.ended ? 'normal' : 'success'}>{room.ended ? 'Завершена' : 'Идёт встреча'}</Label>
       </Flex>
-      {!location.hash.startsWith('#meeting/') && (
+      {manage && (
         <Link href={'#meeting/' + item.key}>Открыть Emergency Room · {room.id}</Link>
       )}
       <Text color="secondary">Стенд МТС Линк · {item.id}</Text>
@@ -254,7 +272,7 @@ export function Meeting({item}: {item: Incident}) {
             <Text>
               {m.left ? 'Вышел в ' + m.left : m.joined ? (room.ended ? 'Подключился в ' : 'В звонке с ') + m.joined : 'Вход не зафиксирован'}
             </Text>
-            {!room.ended && (
+            {manage && !room.ended && (
               <Flex gap="spacing-2" wrap>
                 <Button
                   size="s"
@@ -298,14 +316,14 @@ export function Meeting({item}: {item: Incident}) {
           <ol className="mcc-disclosure-body meeting-timeline">
             {room.timeline.map((e, i) => (
               <li key={i}>
-                <Text as="time" color="secondary">{fullTime(e.at)}</Text>
+                <Text as="time" color="secondary">{fullTime(standNow(desk,e.at))}</Text>
                 <span>{e.who} · {e.text}</span>
               </li>
             ))}
           </ol>
         </details>
       )}
-      {!room.ended ? (
+      {!room.ended && manage && (
         <>
           <div className="incident-fields">
             <div className="mcc-field">
@@ -333,7 +351,8 @@ export function Meeting({item}: {item: Incident}) {
           <Text color="secondary">Транскрипт готовится после завершения встречи.</Text>
           <Button onClick={() => void act({type: 'meetingEnd', key: item.key})}>Завершить демовстречу</Button>
         </>
-      ) : (
+      )}
+      {room.ended && (
         <>
           <Text as="h3" variant="subheader-3">
             Сводка по транскрипту
@@ -373,9 +392,12 @@ export function Meeting({item}: {item: Incident}) {
     </Card>
   )
 }
-export function OfficialCard({item}: {item: Incident}) {
+export function OfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?: string}) {
+  return <ItsmEditor item={item} proposedTeam={proposedTeam} local={<LocalOfficialCard item={item} proposedTeam={proposedTeam}/>} />
+}
+function LocalOfficialCard({item, proposedTeam}: {item: Incident; proposedTeam?: string}) {
   const {act} = useWorkspace()
-  const [team, setTeam] = useState(item.team),
+  const [team, setTeam] = useState(proposedTeam || item.team),
     [priority, setPriority] = useState(String(item.priority)),
     [status, setStatus] = useState(item.state)
   const [solution, setSolution] = useState(item.solution ?? ''),

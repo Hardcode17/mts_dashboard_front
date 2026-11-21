@@ -1,3 +1,4 @@
+import {identityFixture} from './support/identity.mjs'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {mkdtemp, writeFile, rm} from 'node:fs/promises'
@@ -8,7 +9,8 @@ import {join} from 'node:path'
 import {setTimeout as delay} from 'node:timers/promises'
 import {mockService} from '../mock/server.ts'
 
-test('a real file edit is polled; SQLite survives service restart; partial writes and stale commands are rejected', async () => {
+test('a real file edit is polled; SQLite survives service restart; partial writes and stale commands are rejected', async (t) => {
+  const identity = await identityFixture(t)
   const dir = await mkdtemp(join(tmpdir(), 'mcc-api-test-')),
     file = join(dir, 'source.json')
   const source = JSON.parse(readFileSync(new URL('../mock/fixtures/incidents.json', import.meta.url)))
@@ -17,7 +19,7 @@ test('a real file edit is polled; SQLite survives service restart; partial write
   await writeFile(file, original)
   let api, server, root
   async function start() {
-    api = mockService(dir, file)
+    api = mockService(dir, file, undefined, identity.settings)
     server = createServer((q, r) => api.handle(q, r, () => r.end()))
     await new Promise((done) => server.listen(0, '127.0.0.1', done))
     root = 'http://127.0.0.1:' + server.address().port + '/api/stand/'
@@ -26,9 +28,9 @@ test('a real file edit is polled; SQLite survives service restart; partial write
     await new Promise((done) => server.close(done))
     api.close()
   }
-  const read = async () => (await (await fetch(root + 'snapshot?mode=case')).json()).desk
+  const read = async () => (await (await identity.request(root + 'snapshot?mode=case')).json()).desk
   const action = (c) =>
-    fetch(root + 'action?mode=case', {
+    identity.request(root + 'action?mode=case', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify(c),

@@ -15,11 +15,11 @@ export function correlationIndex(incidents: Incident[]) {
     }
   return index
 }
-export function similarIncidents(index: Map<string, Incident[]>, item: Incident) {
+export function similarIncidents(index: Map<string, Incident[]>, item: Incident, excluded?: ReadonlySet<string>) {
   const matches = new Map<string, {incident: Incident; score: number; reasons: string[]}>()
   for (const token of tokens(item))
     for (const other of index.get(token) ?? []) {
-      if (other.key === item.key || other.absent) continue
+      if (other.key === item.key || other.absent || excluded?.has(other.key)) continue
       let hit = matches.get(other.key)
       if (!hit) {
         hit = {incident: other, score: 0, reasons: []}

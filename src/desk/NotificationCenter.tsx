@@ -121,7 +121,7 @@ function AssignmentNotice({notice, attempt}: {notice: Notice; attempt?: Attempt}
 }
 
 export function NotificationCenter({incidents}: {incidents: Incident[]}) {
-  const {desk, act, person, busy} = useWorkspace()
+  const {desk, act, person} = useWorkspace()
   const incidentKey = new URLSearchParams(location.hash.split('?')[1]).get('incident')
   const numbers = useMemo(() => new Map(incidents.map(i => [i.key, i.id])), [incidents])
   const attempts = useMemo(() => new Map(desk.tasks.flatMap(t => t.attempts.map(a => [a.id, a] as const))), [desk.tasks])
@@ -142,7 +142,7 @@ export function NotificationCenter({incidents}: {incidents: Incident[]}) {
           Доставка уведомлений
         </Text>
         {incidentKey && <Flex alignItems="center" wrap gap="spacing-3">
-          <Link href={'#incident/' + incidentKey + '?tab=work'}>{numbers.get(incidentKey) ?? incidentKey} · Работа смены</Link>
+          <Link href={'#incident/' + incidentKey + '?section=notify'}>{numbers.get(incidentKey) ?? incidentKey} · К инциденту</Link>
           <Link href="#desk/notifications">Все инциденты</Link>
         </Flex>}
         <div className="shift-delivery-filters">
@@ -227,7 +227,14 @@ export function NotificationCenter({incidents}: {incidents: Incident[]}) {
           />
         )}
       </Card>
-      <Card className="mcc-glass incident-panel">
+    </div>
+  )
+}
+
+export function StandChannels() {
+  const {desk, act, busy} = useWorkspace()
+  return (
+    <Card className="mcc-glass incident-panel">
         <Text as="h2" variant="header-1">
           Каналы смены
         </Text>
@@ -248,6 +255,5 @@ export function NotificationCenter({incidents}: {incidents: Incident[]}) {
           </div>
         </details>
       </Card>
-    </div>
   )
 }

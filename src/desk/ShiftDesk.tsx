@@ -1,4 +1,5 @@
 import {useMemo, useRef, useState} from 'react'
+import {usesRealBackend} from '../shared/api/mode'
 import {
   Button,
   Card,
@@ -14,16 +15,19 @@ import {
   TextInput,
 } from '@gravity-ui/uikit'
 import {useWorkspace} from './context'
-import {usesRealBackend} from '../shared/api/mode'
 import {historyFields} from '../incidentHistory'
-import {fullTime, standNow, type Task} from './types'
+import {approvedTeam, fullTime, standNow, type Task} from './types'
 import type {Incident} from '../demoData'
-import {NotificationCenter} from './NotificationCenter'
+import {ListVirtualizer} from '@gravity-ui/uikit/virtualizer'
+import {NotificationCenter, StandChannels} from './NotificationCenter'
+import {IncidentHandover} from './CardWork'
 
-function TaskDetail({task, item, onHandoff}: {task: Task; item: Incident; onHandoff: (message: string) => void}) {
+function TaskDetail({task, item, onHandoff}: {task: Task; item: Incident; onHandoff: (key: string) => void}) {
   const {desk, act, person, busy, now} = useWorkspace()
   const attempt = task.attempts.at(-1)
-  const [team, setTeam] = useState('')
+  const [draft, setTeam] = useState<string | undefined>()
+  const choice = approvedTeam(desk.work[item.key], item.site === 'Ростов' ? 'Сетевая поддержка · Ростов' : undefined)
+  const team = draft ?? choice
   const formatTime = (at: number) => fullTime(standNow(desk, at))
   const assigned = attempt && !attempt.ended && !task.finished ? attempt : undefined
   const mine = assigned?.person === person
@@ -52,12 +56,13 @@ function TaskDetail({task, item, onHandoff}: {task: Task; item: Incident; onHand
         </Text>
         {mine && assigned && (assigned.accepted ? (
           <div className="shift-handoff">
+            {choice && <span className="handoff-reason">Согласовано в рекомендации · {choice}</span>}
             <TextInput value={team} onUpdate={setTeam} placeholder="Команда решения"
               controlProps={{'aria-label': 'Команда решения ' + item.id}} />
             <Button view="action" disabled={!team.trim() || busy}
               onClick={async () => {
                 const sent = await act({type: 'handoff', person, id: assigned.id, key: item.key, value: team, expected: item.updatedAt ?? 0})
-                if (sent) onHandoff(item.id + ' передан команде «' + team.trim() + '».')
+                if (sent) onHandoff(item.key)
               }}>
               Передать исполнителю
             </Button>
@@ -96,7 +101,7 @@ const taskScopes = [
 type TaskScope = typeof taskScopes[number]['id']
 
 export function PersonalDesk({incidents}: {incidents: Incident[]}) {
-  const {desk, person, login, act, busy} = useWorkspace()
+  const {desk, person, login, act, busy, itsmExternal} = useWorkspace()
   const [scope, setScope] = useState<TaskScope>('mine')
   const [query, setQuery] = useState('')
   const [feedback, setFeedback] = useState('')
@@ -147,7 +152,9 @@ export function PersonalDesk({incidents}: {incidents: Incident[]}) {
         <Select className="shift-scope-select" width="max" aria-label="Очередь задач" value={[scope]}
           options={taskScopes.map(({id, label}) => ({value:id, content:label+' · '+groups[id].length}))}
           onUpdate={([id])=>selectScope(id as TaskScope)} />
-        {feedback && <Text role="status">{feedback}</Text>}
+        {feedback && byKey.get(feedback) && <Text role="status">
+          {itsmExternal ? 'ITSM подтвердила назначение' : 'Назначение на стенде'} · {byKey.get(feedback)!.id} · {byKey.get(feedback)!.team}
+        </Text>}
         {(queue.length > 10 || query) && <TextInput type="search" hasClear value={query}
           placeholder="Номер, продукт или сбой" controlProps={{'aria-label':'Поиск в задачах на распределение'}}
           onUpdate={value => {setQuery(value); setPage(1)}} />}
@@ -163,9 +170,9 @@ export function PersonalDesk({incidents}: {incidents: Incident[]}) {
       </Card>
       <Card className="mcc-glass incident-panel shift-coordinator">
         <Text as="h2" variant="header-1">Дежурный смены</Text>
-        <Select aria-label="Дежурный" width="max" size="l" value={[actor.id]}
+        {usesRealBackend ? <Text variant="subheader-2">{actor.name}</Text> : <Select aria-label="Дежурный" width="max" size="l" value={[actor.id]}
           options={desk.people.map(p => ({value:p.id, content:p.name}))}
-          onUpdate={([id]) => {login(id); setQuery(''); setFeedback(''); setPage(1)}} />
+          onUpdate={([id]) => {login(id); setQuery(''); setFeedback(''); setPage(1)}} />}
         <div className="shift-availability">
           <Switch checked={actor.available} disabled={busy}
             onUpdate={enabled => void act({type:'available', person:actor.id, enabled})}>
@@ -191,8 +198,31 @@ export function PersonalDesk({incidents}: {incidents: Incident[]}) {
     </div>
   )
 }
-function SourceDesk() {
-  const {desk, mode, source, checked, refresh, act, error} = useWorkspace()
+function IncidentPicker({incidents, value, onUpdate}: {
+  incidents: Incident[]; value: string; onUpdate: (key: string) => void
+}) {
+  const options = useMemo(() => incidents.map(i => ({value: i.key, content: i.id + ' · ' + i.title})), [incidents])
+  return <ListVirtualizer><Select width="max" filterable aria-label="Выбрать инцидент" placeholder="Номер INC или сбой"
+    value={value ? [value] : []} options={options} onUpdate={([key]) => onUpdate(key)}/></ListVirtualizer>
+}
+
+function HandoverDesk({incidents}: {incidents: Incident[]}) {
+  const key = new URLSearchParams(location.hash.split('?')[1]).get('incident')
+  const item = incidents.find(i => i.key === key)
+  return <div className="desk-stack">
+    <Card className="mcc-glass incident-panel">
+      <Text as="h2" variant="header-1">Сводка для передачи смены</Text>
+      <IncidentPicker incidents={incidents} value={item?.key ?? ''} onUpdate={next => {location.hash = 'desk/handover?incident=' + encodeURIComponent(next)}}/>
+      {key && !item && <Text color="secondary">Этот INC отсутствует в выбранном наборе.</Text>}
+    </Card>
+    {item && <IncidentHandover item={item}/>}
+  </div>
+}
+
+export function StandSettings({incidents}: {incidents: Incident[]}) {
+  const {desk, mode, source, checked, refresh, act, error, busy} = useWorkspace()
+  const requested = new URLSearchParams(location.hash.split('?')[1]).get('incident')
+  const item = incidents.find(i => i.key === requested) ?? (!requested ? incidents[0] : undefined)
   const fileInput = useRef<HTMLInputElement>(null)
   const [threshold, setThreshold] = useState(String(desk.threshold)),
     [json, setJson] = useState(''),
@@ -209,52 +239,64 @@ function SourceDesk() {
     }
   }
   return (
-    <div className="desk-grid">
+    <div className="desk-grid stand-settings">
+      <Card className="mcc-glass incident-panel">
+        <Text as="h2" variant="header-1">Сценарии стенда</Text>
+        <Button view="outlined" disabled={busy} onClick={() => void act({type:'demo'})}>Демо: новый крит</Button>
+        <div className="mcc-field">
+          <Text as="h3" variant="subheader-2">Настройки инцидента</Text>
+          <IncidentPicker incidents={incidents} value={item?.key ?? ''} onUpdate={key => {location.hash='stand?incident='+encodeURIComponent(key)}}/>
+        </div>
+        {item && <Flex gap="spacing-3" wrap>
+          <Link href={'#stand/room/'+encodeURIComponent(item.key)}>Управление демовстречей</Link>
+          <Link href={'#stand/agent/'+encodeURIComponent(item.key)}>Условия разбора ИИ</Link>
+        </Flex>}
+        {item && <details>
+          <summary>Доступность команды решения</summary>
+          <div className="mcc-disclosure-body mcc-field">
+            <label htmlFor="stand-availability">Доступность по графику стенда</label>
+            <Select id="stand-availability" width="max" value={[desk.work[item.key]?.availability ?? 'unknown']}
+              options={[
+                {value:'unknown',content:'Нет ответа о доступности'}, {value:'ready',content:'Трое свободны'},
+                {value:'wait',content:'Двое свободны, третий через час'},
+              ]}
+              onUpdate={([value]) => void act({type:'advisor',key:item.key,kind:'availability',value})}/>
+          </div>
+        </details>}
+      </Card>
+      <StandChannels/>
       <Card className="mcc-glass incident-panel">
         <Text as="h2" variant="header-1">
           Источник карточек
         </Text>
-        {!usesRealBackend && <div className="mcc-field">
+        <div className="mcc-field">
           <label htmlFor="shift-dataset">Набор данных</label>
           <Select id="shift-dataset" width="max" value={[mode]}
             options={[
-              {value: 'api', content: 'API MCC · mock/backend'},
               {value: 'case', content: 'Кейс МТС · JSON'},
               {value: 'volume', content: 'Большая смена · 3600 INC'},
             ]}
-            onUpdate={([v]) => source(v === 'case' || v === 'volume' ? v : 'api')}
+            onUpdate={([v]) => source(v === 'case' ? 'case' : 'volume')}
           />
-        </div>}
+        </div>
         <div className="shift-source-status">
           <Text>{error || desk.sourceError || 'Опрос работает'}</Text>
           <Text color="secondary">Последняя проверка: {checked ? fullTime(checked) : 'ожидаем ответа'}</Text>
         </div>
         <Button onClick={() => void refresh()}>Обновить сейчас</Button>
-        {mode !== 'api' && <div className="shift-source-threshold">
+        <div className="shift-source-threshold">
           <div className="mcc-field">
             <label htmlFor="shift-sla-threshold">Порог предупреждения SLA, мин</label>
             <TextInput id="shift-sla-threshold" type="number" value={threshold} onUpdate={setThreshold} />
           </div>
           <Button onClick={() => void act({type: 'threshold', number: Number(threshold)})}>Сохранить порог</Button>
-        </div>}
+        </div>
       </Card>
       <Card className="mcc-glass incident-panel">
         <Text as="h2" variant="header-1">
-          {mode === 'api' ? 'API рабочего места MCC' : mode === 'case' ? 'Проверка снимка ITSM' : 'Большая смена'}
+          {mode === 'case' ? 'Проверка снимка ITSM' : 'Большая смена'}
         </Text>
-        {mode === 'api' ? (
-          <>
-            <Text>
-              Дашборд читает опубликованные инциденты через `GET /api/dashboard/incidents`
-              и свежесть снимка через `GET /api/snapshot/status`. Источник только
-              для чтения; действия маршрутизации остаются в отдельном демо-режиме.
-            </Text>
-            <Text color="secondary">
-              Карточка открывается по `/incidents/:id`; обновление выполняется
-              опросом API раз в 5 секунд.
-            </Text>
-          </>
-        ) : mode === 'case' ? (
+        {mode === 'case' ? (
           <>
             <Text>
               Источник:{' '}
@@ -316,9 +358,10 @@ function SourceDesk() {
         ) : (
           <>
             <Text>Для загрузки снимка ITSM выберите «Кейс МТС · JSON».</Text>
+            <Link href="/prototype/cerebro/">Демоминута: 479 критических, 300 входов и 300 выходов →</Link>
             <Button
               onClick={async () => {
-                if (await act({type: 'wifi'})) location.hash = 'incident/wifi-rostov?tab=work'
+                if (await act({type: 'wifi'})) location.hash = 'incident/wifi-rostov?section=related'
               }}
             >
               Сценарий Wi-Fi · Ростов
@@ -330,24 +373,21 @@ function SourceDesk() {
   )
 }
 export function ShiftDesk({tab, incidents}: {tab: string | undefined; incidents: Incident[]}) {
-  const {mode} = useWorkspace()
-  if (mode === 'api') return <div className="shift-desk"><SourceDesk /></div>
-
   return (
     <div className="shift-desk">
       <nav className="desk-tabs" aria-label="Инструменты смены">
         {[
           ['tasks', 'Назначения'],
           ['notifications', 'Уведомления'],
-          ['source', 'Источник данных'],
+          ['handover', 'Передача смены'],
         ].map(([key, name]) => (
           <Link key={key} href={'#desk/' + key} aria-current={(tab ?? 'tasks') === key ? 'page' : undefined}>
             {name}
           </Link>
         ))}
       </nav>
-      {tab === 'source' ? (
-        <SourceDesk />
+      {tab === 'handover' ? (
+        <HandoverDesk incidents={incidents}/>
       ) : tab === 'notifications' ? (
         <NotificationCenter incidents={incidents} />
       ) : (

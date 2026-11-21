@@ -1,13 +1,7 @@
+import {usesRealBackend} from '../shared/api/mode'
+import {workspaceFetch} from '../auth/session'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import type {Command, Desk, Source} from './types'
-import {workspaceIncidents} from './records'
-import {usesRealBackend} from '../shared/api/mode'
-import {incidentsApi} from '../features/incidents/api/client'
-import {toApiDesk} from '../features/incidents/model/toDesk'
-import {createIncidentFlowTracker, type IncidentFlow} from '../features/incidents/model/incidentFlow'
-import type {IncidentListResponse, SnapshotStatus} from '../entities/incident/model/api-types'
-
-type DataSource = Source | 'api'
 
 interface Reply {
   desk: Desk | null
@@ -15,48 +9,41 @@ interface Reply {
   checked: number
   now: number
   error?: string
+  person?: string
+  itsmExternal?: boolean
 }
-function linkedSource(): DataSource | undefined {
-  const {hash} = window.location
+function linkedSource(): Source | undefined {
+  const {hash, search} = window.location
+  const params = new URLSearchParams(search)
+  const selected = params.get('dataset')
+  if((!/^#(?:evidence|investigation)\//.test(hash) || !hash.includes('dataset=')) && (selected==='case'||selected==='volume')) return selected
   if (!/^#(?:evidence|investigation)\//.test(hash)) return
   const value = new URLSearchParams(hash.split('?')[1]).get('dataset')
-  return value === 'volume' || value === 'case' || value === 'api'
-    ? value
-    : undefined
-}
-
-function savedSource(): DataSource {
-  const saved = localStorage.getItem('mcc-source')
-  return saved === 'case' || saved === 'volume' || saved === 'api'
-    ? saved
-    : 'volume'
+  return value === 'volume' || value === 'case' ? value : undefined
 }
 
 export function useDesk() {
-  const [mode, setMode] = useState<DataSource>(() => usesRealBackend ? 'api' : linkedSource() ?? savedSource())
+  const [mode, setMode] = useState<Source>(() =>
+    usesRealBackend ? 'case' : linkedSource() ?? (localStorage.getItem('mcc-source') === 'case' ? 'case' : 'volume'),
+  )
   const [person, setPerson] = useState(() => usesRealBackend ? '' : localStorage.getItem('mcc-person') || 'anna')
   const [desk, setDesk] = useState<Desk | null>(null)
-  const [incidentFlow, setIncidentFlow] = useState<IncidentFlow | null>(null)
   const [now, setNow] = useState(Date.now)
+  const [itsmExternal, setItsmExternal] = useState(false)
   const [checked, setChecked] = useState(0),
     [error, setError] = useState(''),
     [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(false)
-  const current = useRef<{mode: DataSource; version: number; flowVersion?: number}>({mode, version: -1})
-  const flowTracker = useRef<ReturnType<typeof createIncidentFlowTracker> | null>(null)
-  const apiSnapshot = useRef<{incidents: IncidentListResponse; status: SnapshotStatus} | null>(null)
+  const current = useRef({mode, version: -1})
   const clockOffset = useRef(0)
-  const accept = useCallback((reply: Reply, source: DataSource) => {
+  const accept = useCallback((reply: Reply, source: Source) => {
     if (current.current.mode !== source || reply.version < current.current.version) return
     if (reply.desk) {
       current.current.version = reply.version
       setDesk(reply.desk)
-      if (!reply.desk.apiBeforeFirstSuccess && !reply.desk.sourceError && current.current.flowVersion !== reply.version) {
-        const track = (flowTracker.current ??= createIncidentFlowTracker())
-        current.current.flowVersion = reply.version
-        setIncidentFlow(track(workspaceIncidents(reply.desk.records, reply.desk.mode), reply.now))
-      }
     }
+    if (usesRealBackend && reply.person) setPerson(reply.person)
+    if (reply.itsmExternal !== undefined) setItsmExternal(reply.itsmExternal)
     setChecked(reply.checked)
     clockOffset.current = reply.now - Date.now()
     setNow(reply.now)
@@ -66,72 +53,36 @@ export function useDesk() {
     async (signal?: AbortSignal) => {
       const snapshot = current.current
       try {
-        if (snapshot.mode === 'api') {
-          const timeout = AbortSignal.timeout(5000)
-          const requestSignal = signal
-            ? AbortSignal.any([signal, timeout])
-            : timeout
-          const [incidents, status] = await Promise.all([
-            incidentsApi.getIncidents({}, requestSignal),
-            incidentsApi.getSnapshotStatus(requestSignal),
-          ])
-          if (signal?.aborted || snapshot !== current.current || incidents.eventSeq < snapshot.version) return
-          const previous = apiSnapshot.current
-          const changed = previous?.incidents !== incidents ||
-            previous.status.stale !== status.stale ||
-            previous.status.lastSuccessAt !== status.lastSuccessAt
-          apiSnapshot.current = {incidents, status}
-          const now = Date.now()
-          accept(
-            {
-              desk: changed ? toApiDesk(incidents, status, now) : null,
-              version: incidents.eventSeq,
-              checked: now,
-              now,
-            },
-            snapshot.mode,
-          )
-          return
-        }
-
-        const r = await fetch('/api/stand/snapshot?mode=' + snapshot.mode + '&since=' + snapshot.version, {
-          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
+        const r = await workspaceFetch('/api/stand/snapshot?mode=' + snapshot.mode + '&since=' + snapshot.version, {
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
           cache: 'no-store',
         })
         if (!r.ok) throw Error('HTTP ' + r.status)
         accept(await r.json(), snapshot.mode)
       } catch (e) {
-      if (!signal?.aborted && snapshot.mode === current.current.mode)
-        setError('Источник недоступен. ' + (e instanceof Error ? e.message : ''))
+        if (!signal?.aborted && snapshot.mode === current.current.mode)
+          setError('Источник недоступен. ' + (e instanceof Error ? e.message : ''))
       }
     },
     [accept],
   )
   useEffect(() => {
     const controller = new AbortController()
-    const initialRequest = window.setTimeout(() => void refresh(controller.signal), 0)
+    void refresh(controller.signal)
     const clock = window.setInterval(() => setNow(Date.now() + clockOffset.current), 1000)
-    const timer = window.setInterval(
-      () => void refresh(controller.signal),
-      mode === 'api' ? 5000 : 2000,
-    )
+    const timer = window.setInterval(() => void refresh(controller.signal), usesRealBackend ? 5000 : 2000)
     return () => {
       controller.abort()
-      clearTimeout(initialRequest)
       clearInterval(timer)
       clearInterval(clock)
     }
   }, [mode, refresh])
   async function act(command: Command) {
     const source = current.current.mode
-    if (source === 'api') {
-      setActionError('Источник API пока доступен только для чтения.')
-      return false
-    }
     setBusy(true)
     setActionError('')
     try {
-      const r = await fetch('/api/stand/action?mode=' + source, {
+      const r = await workspaceFetch('/api/stand/action?mode=' + source, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(command),
@@ -148,14 +99,11 @@ export function useDesk() {
       setBusy(false)
     }
   }
-  const selectSource = useCallback((value: DataSource) => {
+  const selectSource = useCallback((value: Source) => {
     if (usesRealBackend) return
     localStorage.setItem('mcc-source', value)
     if (value === current.current.mode) return
     current.current = {mode: value, version: -1}
-    flowTracker.current = null
-    apiSnapshot.current = null
-    setIncidentFlow(null)
     setDesk(null)
     setChecked(0)
     setError('')
@@ -171,23 +119,29 @@ export function useDesk() {
     window.addEventListener('hashchange', followLink)
     return () => window.removeEventListener('hashchange', followLink)
   }, [selectSource])
-  function source(value: DataSource) {
+  function source(value: Source) {
+    const url=new URL(window.location.href)
+    if(url.searchParams.has('dataset')){
+      url.searchParams.set('dataset',value)
+      history.replaceState(history.state,'',url)
+    }
     selectSource(value)
-    location.hash = 'desk/source'
+    location.hash = 'stand'
   }
   function login(value: string) {
+    if (usesRealBackend) return
     localStorage.setItem('mcc-person', value)
     setPerson(value)
   }
   return {
     desk,
-    incidentFlow,
     mode,
     person,
     source,
     login,
     now,
     checked,
+    itsmExternal,
     error,
     actionError,
     busy,
