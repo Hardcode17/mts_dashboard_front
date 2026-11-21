@@ -1,4 +1,4 @@
-import {useMemo} from 'react'
+import {memo, useMemo} from 'react'
 import {Button, Card, Flex, Label, Link, Pagination, Progress, Select, Text, TextInput, useViewportSize} from '@gravity-ui/uikit'
 import {Table, useTable} from '@gravity-ui/table'
 import type {ColumnDef} from '@gravity-ui/table/tanstack'
@@ -6,9 +6,10 @@ import {type Incident, type ShiftEvent} from './demoData'
 import {EventStream, EventJournal} from './EventStream'
 import {ShiftCharts} from './ShiftCharts'
 import {incidentOrder,registrationTime} from './desk/order'
+import {groupIncidents, recentlyUpdated} from './desk/incidentGroups'
 import {useWorkspace} from './desk/context'
 import {QueueFilters} from './desk/QueueFilters'
-import {active,onCoordinators,standNow,dueInstant,fullTime} from './desk/types'
+import {active,standNow,dueInstant,fullTime} from './desk/types'
 import './Overview.css'
 
 const queues = [
@@ -21,18 +22,6 @@ const queues = [
 type QueueKey = typeof queues[number]['key']
 export type OverviewQueue = QueueKey | 'events' | 'all'
 type Props = {listingHash:string; incidents: Incident[]; events: ShiftEvent[]; summary: boolean; wall: boolean; activeQueue: OverviewQueue}
-
-function groupIncidents(incidents: Incident[]) {
-  const groups: Record<QueueKey, Incident[]> = {critical: [], assigned: [], high: [], research: []}
-  for (const item of incidents) {
-    const isActive = active(item)
-    if (isActive && item.priority === 4) groups.critical.push(item)
-    if (onCoordinators(item)) groups.assigned.push(item)
-    if (isActive && item.priority === 3) groups.high.push(item)
-    if (item.research) groups.research.push(item)
-  }
-  return groups
-}
 
 const format = new Intl.NumberFormat('ru-RU')
 const pageSizes = [25, 50, 100]
@@ -92,7 +81,7 @@ const columns: ColumnDef<Incident>[] = [
   {accessorKey: 'due', size: 110, header: 'Срок решения', cell: ({row}) => <Deadline item={row.original} />},
 ]
 
-function IncidentTable({rows, label}: {rows: Incident[]; label: string}) {
+const IncidentTable = memo(function IncidentTable({rows, label}: {rows: Incident[]; label: string}) {
   const {width} = useViewportSize()
   const table = useTable({data: rows, columns, getRowId: (item) => item.key})
   if (width !== undefined && width <= 864) return (
@@ -107,7 +96,7 @@ function IncidentTable({rows, label}: {rows: Incident[]; label: string}) {
     </ul>
   )
   return <Table table={table} size="s" stickyHeader verticalAlign="middle" className="overview-data-table" attributes={{'aria-label': label}} />
-}
+})
 
 function queueHref(queue: OverviewQueue, params: URLSearchParams) {
   const query = params.toString()
@@ -118,9 +107,9 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
   const {desk,now}=useWorkspace()
   const reference=standNow(desk,now)
   const hash=listingHash
-  const params = new URLSearchParams(hash.split('?')[1])
+  const params = useMemo(() => new URLSearchParams(hash.split('?')[1]), [hash])
   const query = params.get('q') ?? ''
-  const sort = params.get('sort') || 'deadline'
+  const sort = params.get('sort') || 'updated'
   const sizeParam = Number(params.get('size'))
   const size = pageSizes.includes(sizeParam) ? sizeParam : pageSizes[0]
   const groups = useMemo(() => groupIncidents(incidents), [incidents])
@@ -129,29 +118,35 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
   const soonOnly = groupKey === 'critical' && params.get('sla') === 'soon'
   const clearFilters = Object.fromEntries(['q', 'priority', 'product', 'team', 'state', 'serviceType', 'deadline', 'sla', 'page'].map(key => [key, '']))
   const filtered = Object.keys(clearFilters).some(key => key !== 'page' && Boolean(params.get(key)))
-  const words = query.trim().toLocaleLowerCase('ru-RU').split(/\s+/).filter(Boolean)
-  const results = wall||summary||activeQueue==='events'?[]:group.filter((item) => {
-    if (soonOnly) {
-      const at=dueInstant(item);const left=at===null?null:Math.ceil((at-reference)/60000)
-      if (left === null || left < 0 || left > 30) return false
-    }
-    for(const field of ['priority','product','team','state','serviceType'] as const){
-      const value=params.get(field);if(value&&String(item[field]??'')!==value)return false
-    }
-    const deadline=params.get('deadline'),due=dueInstant(item)
-    if(deadline==='none'&&due!==null)return false
-    if(deadline==='late'&&(!active(item)||due===null||due>=reference))return false
-    if(deadline==='near'&&(!active(item)||due===null||due<reference||due-reference>desk.threshold*60000))return false
-    if (!words.length) return true
-    const text = [item.id, item.product, item.title, item.team].join(' ').toLocaleLowerCase('ru-RU')
-    return words.every((word) => text.includes(word))
-  }).sort(sort==='updated'?(a,b)=>(b.updatedAt??registrationTime(b))-(a.updatedAt??registrationTime(a))||incidentOrder(a,b):
-    sort==='registered'?(a,b)=>registrationTime(b)-registrationTime(a)||a.id.localeCompare(b.id):incidentOrder)
+  const deadline = params.get('deadline')
+  const filterTime = soonOnly || deadline === 'late' || deadline === 'near' ? reference : 0
+  const threshold = desk.threshold
+  const results = useMemo(() => {
+    const words = query.trim().toLocaleLowerCase('ru-RU').split(/\s+/).filter(Boolean)
+    if (wall || summary || activeQueue === 'events') return []
+    return group.filter((item) => {
+      if (soonOnly) {
+        const at=dueInstant(item);const left=at===null?null:Math.ceil((at-filterTime)/60000)
+        if (left === null || left < 0 || left > 30) return false
+      }
+      for(const field of ['priority','product','team','state','serviceType'] as const){
+        const value=params.get(field);if(value&&String(item[field]??'')!==value)return false
+      }
+      const due = dueInstant(item)
+      if(deadline==='none'&&due!==null)return false
+      if(deadline==='late'&&(!active(item)||due===null||due>=filterTime))return false
+      if(deadline==='near'&&(!active(item)||due===null||due<filterTime||due-filterTime>threshold*60000))return false
+      if (!words.length) return true
+      const text = [item.id, item.product, item.title, item.team].join(' ').toLocaleLowerCase('ru-RU')
+      return words.every((word) => text.includes(word))
+    }).sort(sort === 'updated' ? recentlyUpdated :
+      sort === 'registered' ? (a, b) => registrationTime(b) - registrationTime(a) || a.id.localeCompare(b.id) : incidentOrder)
+  }, [activeQueue, deadline, filterTime, group, params, query, soonOnly, sort, summary, threshold, wall])
   const lastPage = Math.max(1, Math.ceil(results.length / size))
   const requestedPage = Number(params.get('page'))
   const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(lastPage, requestedPage)) : 1
   const first = (page - 1) * size
-  const pageRows = results.slice(first, first + size)
+  const pageRows = useMemo(() => results.slice(first, first + size), [first, results, size])
   const selected = groupKey === 'all' ? {title: 'Все инциденты', symbol: '≡'} : queues.find((queue) => queue.key === groupKey)!
   const navParams = activeQueue === 'events' ? new URLSearchParams() : new URLSearchParams(params)
   navParams.delete('page')
