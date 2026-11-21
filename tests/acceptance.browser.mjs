@@ -61,6 +61,13 @@ async function stand(t, rows = fixture) {
     read: async (mode) => (await (await fetch(root + '/api/stand/snapshot?mode=' + mode)).json()).desk,
   }
 }
+async function setTheme(page, theme) {
+  const toggle = page.getByRole('switch', {name: 'Тёмная тема'})
+  const checked = String(theme === 'dark')
+  if (await toggle.getAttribute('aria-checked') !== checked) await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', checked)
+}
+
 test('acceptance: file polling, critical burst, resolution, external card, revisions and stale input', async (t) => {
   const {open, file, root, read} = await stand(t),
     p = await open('case')
@@ -219,7 +226,7 @@ test('acceptance: similar incidents, staffing estimate, operator decision, notes
 test('acceptance: queue filters, responsive layouts, analysis sources, telemetry loss and recovery experiment', async (t) => {
   const {open, root, read} = await stand(t),
     p = await open('volume', 'anna', 390)
-  await p.locator('input[value="dark"]').check()
+  await setTheme(p, 'dark')
   await p.goto(root + '/#queue/all')
   await p.getByLabel('Поиск по всем инцидентам').fill('INC000021940112')
   await p.locator('.overview-table-scroll a').first().click()
@@ -308,10 +315,18 @@ test('shift panels keep their spacing on a direct visit and fit a narrow screen 
   await page.goto(root + '/#desk/tasks')
   assert.deepEqual(await layout(), direct)
 
+  await setTheme(page, 'light')
+  const toggle = page.getByRole('switch', {name: 'Тёмная тема'})
+  await toggle.focus()
+  await page.keyboard.press('Space')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await page.reload()
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+
   await page.getByRole('radio', {name:/В очереди/}).check()
   await expect(page.locator('.shift-task-list > li').first()).toBeVisible()
   for (const theme of ['light', 'dark']) {
-    await page.locator('input[value="'+theme+'"]').check()
+    await setTheme(page, theme)
     await page.setViewportSize({width:320, height:850})
     for (const [route, selector] of [['desk/tasks','.shift-queue'], ['desk/notifications','.shift-notifications'], ['desk/source','.desk-grid'], ['queue/all','.overview-table-panel'], ['overview','.overview-summary']]) {
       await page.goto(root + '/#' + route)
@@ -370,7 +385,7 @@ test('expanded agent diagnostics keep labels, checkboxes and the submit action v
   for (const [key, width, theme] of [['incident', 1440, 'light'], ['access', 320, 'dark']]) {
     await p.setViewportSize({width, height: 900})
     await p.goto(root + '/#investigation/' + key)
-    await p.locator('input[value="'+theme+'"]').check()
+    await setTheme(p, theme)
     const summary = p.locator('summary').filter({hasText: 'Источники и проверки стенда'})
     await summary.focus()
     await p.keyboard.press('Enter')
