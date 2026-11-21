@@ -1,6 +1,5 @@
-import {Moon, Sun} from '@gravity-ui/icons'
 import {lazy, Suspense, useEffect, useMemo, useRef, useState} from 'react'
-import {Button, Card, Dialog, Flex, Icon, Label, Link, Loader, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
+import {Button, Card, Dialog, Flex, Label, Link, Loader, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
 import {initialEvents} from './demoData'
 import {correlationIndex,similarIncidents} from './desk/correlation'
 import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
@@ -14,6 +13,8 @@ import './desk/desk.css'
 import {Overview} from './Overview'
 import {IncidentApiRoute} from './features/incidents/ui/IncidentApiRoute'
 import mtsSymbol from './assets/mts-symbol.svg'
+import sunIcon from './assets/theme/sun.svg'
+import moonIcon from './assets/theme/moon.svg'
 import './App.css'
 
 const IncidentView = lazy(() => import('./IncidentView').then(module => ({default: module.IncidentView})))
@@ -158,8 +159,8 @@ function Workspace({theme,changeTheme}:ThemeProps){
           <Flex alignItems="center" gap="spacing-3" className="snapshot">
             <Text className="snapshot-clock" color="secondary" variant="body-1">{moscowTime(standNow(desk,now))} МСК</Text>
             <SegmentedRadioGroup<'light' | 'dark'> aria-label="Тема оформления" value={theme} onUpdate={changeTheme} size="m">
-              <SegmentedRadioGroup.Option value="light" title="Светлая" controlProps={{'aria-label': 'Светлая'}}><Icon data={Sun} size={16} aria-hidden="true"/></SegmentedRadioGroup.Option>
-              <SegmentedRadioGroup.Option value="dark" title="Тёмная" controlProps={{'aria-label': 'Тёмная'}}><Icon data={Moon} size={16} aria-hidden="true"/></SegmentedRadioGroup.Option>
+              <SegmentedRadioGroup.Option value="light" title="Светлая" controlProps={{'aria-label': 'Светлая'}}><img src={sunIcon} width={16} height={16} alt="" className="theme-icon"/></SegmentedRadioGroup.Option>
+              <SegmentedRadioGroup.Option value="dark" title="Тёмная" controlProps={{'aria-label': 'Тёмная'}}><img src={moonIcon} width={16} height={16} alt="" className="theme-icon"/></SegmentedRadioGroup.Option>
             </SegmentedRadioGroup>
           </Flex>
         </Flex>
