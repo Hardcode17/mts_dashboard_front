@@ -1,6 +1,7 @@
 import type {Incident} from '../src/demoData.ts'
 import {moscowTime, coordinatorGroup, externalHttpAddress} from '../src/desk/types.ts'
 import {itsmStateLabels} from '../src/desk/types.ts'
+import {normalizeDeadlineRisk} from '../src/deadlineRisk.ts'
 export function parseSnapshot(raw: unknown): Incident[] {
   if (!Array.isArray(raw)) throw Error('Ожидается массив карточек ITSM.')
   const ids = new Set<string>()
@@ -57,6 +58,7 @@ export function parseSnapshot(raw: unknown): Incident[] {
       restoredEpoch: restored ?? undefined,
       due: dueAt === null ? null : moscowTime(dueAt),
       dueAt,
+      deadlineRisk: normalizeDeadlineRisk(row.deadlineRisk),
       research: state === 'Исследование ситуации',
       assignedAt: team === coordinatorGroup && assigned !== null ? moscowTime(assigned) : undefined,
       restoredAt:

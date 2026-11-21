@@ -15,6 +15,12 @@ export interface DashboardIncidentSummary {
 }
 
 export interface DashboardIncidentCard extends DashboardIncidentSummary {
+  deadlineRisk?: {
+    risk: 'low' | 'medium' | 'high' | 'unknown'
+    evaluatedAt: string
+    reasons: {code: string; text: string}[]
+    score: number | null
+  } | null
   header?: string | null
   description?: string | null
   service?: string | null

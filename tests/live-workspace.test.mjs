@@ -30,6 +30,8 @@ test('live workspace shares real ownership and commits only the edits acknowledg
   }
   const cards = [root, child].map(id => ({...fields, id, header: 'Сбой ' + id, description: 'Отказ доставки',
     service: 'Доставка', assignedEmployee: null, itsmUrl: 'https://example.test/' + id, itsmDemo: false}))
+  cards[0].deadlineRisk = {risk: 'unknown', evaluatedAt: fields.submitDate,
+    reasons: [{code: 'no_history', text: 'Недостаточно исторических данных'}], score: null}
   let revision = 0, stale = false, rejectEdit = false, sourceDown = true
   const writes = [], events = [], detailReads = []
   const acknowledged = []
@@ -147,6 +149,8 @@ test('live workspace shares real ownership and commits only the edits acknowledg
   }
   assert.deepEqual(Object.keys(desk.records).sort(), [root, child])
   assert.equal(desk.records[root].title, cards[0].header)
+  assert.deepEqual(desk.records[root].deadlineRisk, {risk: 'unknown', evaluatedAt: fields.submitDate,
+    reasons: cards[0].deadlineRisk.reasons})
   assert.equal(belongsToQueue(desk.records[root], 'critical'), false)
   assert.equal(belongsToQueue(desk.records[root], 'high'), true)
   assert.equal(desk.apiCounts.high, 2)

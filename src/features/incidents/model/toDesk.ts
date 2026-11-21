@@ -1,6 +1,7 @@
 import type {Incident} from '../../../demoData.ts'
 import type {IncidentDto, IncidentListResponse, SnapshotStatus} from '../../../entities/incident/model/api-types.ts'
 import {emptyWork, type Desk} from '../../../desk/types.ts'
+import {normalizeDeadlineRisk} from '../../../deadlineRisk.ts'
 
 function displayTime(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -50,6 +51,7 @@ export function toIncident(dto: IncidentDto): Incident {
     research: dto.stateEnum === 'Research',
     description: dto.description ?? '',
     groups: dto.groups,
+    deadlineRisk: normalizeDeadlineRisk(dto.deadlineRisk),
   }
 }
 
