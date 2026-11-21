@@ -97,6 +97,24 @@ export interface IncidentDetailResponse {
   meetingUrl: string | null
 }
 
+export interface IncidentRelationshipNode {
+  id: string
+  title: string | null
+  stateEnum: string | null
+  priorityId: number | null
+}
+
+export interface IncidentRelationshipEdge {
+  parentId: string
+  childId: string
+}
+
+export interface IncidentRelationshipsResponse {
+  focusId: string
+  nodes: IncidentRelationshipNode[]
+  edges: IncidentRelationshipEdge[]
+}
+
 export interface SnapshotStatus {
   lastReceivedAt: string | null
   lastSuccessAt: string | null

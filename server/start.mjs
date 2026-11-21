@@ -82,7 +82,7 @@ const server = createServer((incoming, outgoing) => {
     void serve(incoming, outgoing, {public: 'dist', rewrites: [{source: '**', destination: '/index.html'}]})
     return
   }
-  if (!/^\/(?:api\/(?:dashboard(?:\/|\?|$)|me(?:\?|$)|snapshot\/status(?:\?|$))|health(?:\?|$))/.test(path)) {
+  if (!/^\/(?:api\/(?:dashboard(?:\/|\?|$)|me(?:\?|$)|incidents\/[^/?]+\/relationships(?:\?|$)|snapshot\/status(?:\?|$))|health(?:\?|$))/.test(path)) {
     outgoing.writeHead(404).end()
     return
   }

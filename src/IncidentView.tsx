@@ -11,6 +11,7 @@ import {active,dueInstant,fullTime,priorityNames,standNow} from './desk/types'
 import {cardTimeline} from './desk/timeline'
 import {itsmLink} from './desk/itsmLink'
 import {ChangeHistory} from './ChangeHistory'
+import {IncidentRelationships} from './features/incidents/ui/IncidentRelationships'
 import './IncidentView.css'
 
 const impactChart: ChartData = {
@@ -136,7 +137,7 @@ function CardDetails({incident, incidents, requestedTab}: {incident: Incident; i
 }
 
 export function IncidentView({incident, incidents, investigating, backHref, tab}: {incident: Incident; incidents:Incident[]; investigating: boolean; backHref: string; tab: string | null}) {
-  const {act,busy,desk}=useWorkspace()
+  const {act,busy,desk,mode}=useWorkspace()
   const suffix = tab ? '?tab=' + encodeURIComponent(tab) : ''
   const backTitle = backHref.startsWith('#events') ? 'К журналу событий' : backHref.startsWith('#wall') ? 'На общий экран'
     : backHref.startsWith('#desk/') ? 'К моей смене' : backHref.startsWith('#overview') ? 'К сводке смены' : 'К очереди'
@@ -159,6 +160,7 @@ export function IncidentView({incident, incidents, investigating, backHref, tab}
         <Flex gap="spacing-2" wrap><Link {...itsmLink(incident.id, incident.key, import.meta.env.VITE_ITSC_URL)}>Открыть в ITSM</Link><Button size="l" view="action" disabled={busy} onClick={async()=>{await act({type:'analyze',key:incident.key});window.location.hash=`investigation/${incident.key}${suffix}`}}>Разобрать причину агентом</Button></Flex>
       </Flex>
       <CardDetails incidents={incidents} incident={incident} requestedTab={tab}/>
+      <IncidentRelationships key={incident.id} incidentId={incident.id} source={mode === 'api' ? undefined : desk.mode}/>
     </Flex>
   )
 }

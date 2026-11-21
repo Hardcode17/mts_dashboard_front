@@ -5,12 +5,19 @@ import {join, resolve} from 'node:path'
 import type {IncomingMessage, ServerResponse} from 'node:http'
 import {shopStand} from './shop.ts'
 import {applySnapshot, createDesk, execute, tickDesk} from './engine.ts'
+import {initialIncidents} from '../src/demoData.ts'
 import type {Desk, Command, Source} from '../src/desk/types.ts'
 
 export function mockService(
   directory = process.env.MCC_STATE_DIR || resolve('.mcc-stand'),
   file = process.env.MCC_SOURCE_FILE || resolve('mock/fixtures/incidents.json'),
 ) {
+  const relationshipEdges = JSON.parse(
+    readFileSync(
+      process.env.MCC_RELATIONSHIPS_FILE || resolve('mock/fixtures/incident-relationships.json'),
+      'utf8',
+    ),
+  ) as {parentId: string; childId: string}[]
   mkdirSync(directory, {recursive: true})
   const db = new DatabaseSync(join(directory, 'workspace.sqlite'))
   db.exec(
@@ -209,6 +216,32 @@ export function mockService(
         nextCursor: start + limit < rows.length ? cursorPrefix + String(start + limit) : null,
       })
     }
+    if (req.method === 'GET' && url.pathname === '/api/dashboard/monitoring/summary') {
+      const desk = apiDesk()
+      const counts = {critical: 0, high: 0, coordinators: 0, research: 0}
+      const priorities = new Map<number, number>()
+      const loads = new Map<string, number>()
+      let activeCount = 0
+      for (const incident of Object.values(desk.records)) {
+        if (incident.absent) continue
+        const groups = apiGroups(incident)
+        for (const group of groups) counts[group === 'coordinator' ? 'coordinators' : group] += 1
+        if (!['Assigned', 'WorkInProgress'].includes(stateEnum(incident))) continue
+        activeCount += 1
+        priorities.set(incident.priority, (priorities.get(incident.priority) ?? 0) + 1)
+        if (groups.includes('coordinator') && incident.assignee) {
+          loads.set(incident.assignee, (loads.get(incident.assignee) ?? 0) + 1)
+        }
+      }
+      return send(res, 200, {
+        updatedAt: desk.lastImport ? new Date(desk.lastImport).toISOString() : null,
+        activeCount,
+        counts,
+        timeline: [],
+        priorities: [...priorities].map(([priorityId, count]) => ({priorityId, count})),
+        coordinatorLoad: [...loads].map(([name, count]) => ({name, count})),
+      })
+    }
     if (req.method === 'GET' && url.pathname === '/api/snapshot/status') {
       const d = apiDesk()
       const lastSuccessAt = d.lastImport ? new Date(d.lastImport).toISOString() : null
@@ -221,6 +254,40 @@ export function mockService(
         revision: lastSuccessAt ? d.version : null,
         stale: Boolean(d.sourceError || !lastSuccessAt),
       })
+    }
+    const relationshipPath = url.pathname.match(
+      /^\/api\/incidents\/([^/]+)\/relationships$/,
+    )
+    if (req.method === 'GET' && relationshipPath) {
+      const number = decodeURIComponent(relationshipPath[1])
+      // The API source reads the case snapshot, while the dashboard can open a
+      // generated volume card. Resolve both so the read-only graph stays local
+      // and shows the empty state instead of a misleading 404.
+      const records = [
+        ...Object.values(apiDesk().records),
+        ...Object.values(desks.get('volume')!.records),
+        ...initialIncidents,
+      ]
+      const findRecord = (id: string) =>
+        records.find((record) => record.id === id && !record.absent)
+      const item = findRecord(number)
+      if (!item) {
+        return send(res, 404, {
+          code: 'RESOURCE_NOT_FOUND',
+          message: `Resource with id ${number} not found`,
+        })
+      }
+      const edges = relationshipEdges.filter(
+        (edge) => edge.parentId === number || edge.childId === number,
+      )
+      const ids = [...new Set([number, ...edges.flatMap((edge) => [edge.parentId, edge.childId])])]
+      const nodes = ids.map((id) => {
+        const record = findRecord(id)
+        return record
+          ? {id, title: record.title, stateEnum: stateEnum(record), priorityId: record.priority}
+          : {id, title: null, stateEnum: null, priorityId: null}
+      })
+      return send(res, 200, {focusId: number, nodes, edges})
     }
     const incidentPath = url.pathname.match(/^\/api\/dashboard\/incidents\/([^/]+)$/)
     if (req.method === 'GET' && incidentPath) {

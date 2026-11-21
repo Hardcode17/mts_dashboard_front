@@ -4,6 +4,7 @@ import type {
   IncidentDto,
   IncidentListResponse,
   IncidentNumber,
+  IncidentRelationshipsResponse,
   SnapshotStatus,
 } from '../../../entities/incident/model/api-types.ts'
 import type {
@@ -101,6 +102,18 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
         meetingUrl: null,
       }
     },
+
+    getIncidentRelationships(
+      number: IncidentNumber,
+      signal?: AbortSignal,
+    ): Promise<IncidentRelationshipsResponse> {
+      return request(
+        `/api/incidents/${encodeURIComponent(number)}/relationships`,
+        {},
+        signal,
+      )
+    },
+
     getSnapshotStatus(signal?: AbortSignal) {
       return request<SnapshotStatus>('/api/snapshot/status', {}, signal)
     },
@@ -114,5 +127,7 @@ let accessToken: string | undefined
 export function setDashboardAccessToken(token: string | undefined) {
   accessToken = token
 }
+
+export const getDashboardAccessToken = () => accessToken
 
 export const incidentsApi = createIncidentsApi({getAccessToken: () => accessToken})
