@@ -143,3 +143,6 @@
   overflow-wrap: anywhere;
 }
 .signal-content [role="alert"] { max-width: 100%; overflow-wrap: anywhere; }
+
+.theme-icon {display: block;}
+.g-root_theme_dark .theme-icon {filter: invert(1);}
