@@ -34,7 +34,10 @@ if (import.meta.main) {
       const url = origin + '/#investigation/' + key + '?dataset=volume'
       await page.goto(url)
       await page.getByRole('heading', {name: 'Разбор причины агентом', exact: true}).waitFor()
-      await page.locator('input[value="' + theme + '"]').check()
+      const themeSwitch = page.getByRole('switch', {name: 'Тёмная тема'})
+      const checked = String(theme === 'dark')
+      if (await themeSwitch.getAttribute('aria-checked') !== checked) await themeSwitch.click()
+      assert.equal(await themeSwitch.getAttribute('aria-checked'), checked)
       await page.locator('summary').filter({hasText: 'Источники и проверки стенда'}).click()
       const form = page.locator('.agent-diagnostics form')
       await form.getByRole('heading', {name: 'Свежесть данных'}).waitFor()
