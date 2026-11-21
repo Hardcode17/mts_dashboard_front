@@ -113,7 +113,7 @@ try {
     ITSM_MOCK_CLIENT_ID: 'itsm-sender',
     ITSM_MOCK_CLIENT_SECRET: senderSecret,
     DASHBOARD_ITSM_BASE_URL: 'http://itsm-mock:8080',
-    DASHBOARD_ITSM_LINK_TEMPLATE: itsmUrl + '/itsm_incident/{incidentId}/page',
+    DASHBOARD_ITSM_LINK_TEMPLATE: frontendUrl + '/itsm_incident/{incidentId}/page',
     DASHBOARD_ITSM_LINK_DEMO: 'true',
   }
   await writeFile(runtimeFile, Object.entries(backendEnv).map(([key, value]) => `${key}=${value}`).join('\n') + '\n',
@@ -163,7 +163,7 @@ try {
     '-v', 'display_name=KAN-73 Test Coordinator'], await readFile(join(backend, 'scripts/grant-coordinator.sql')))
 
   const server = spawnCommand(process.execPath, [join(root, 'server/start.mjs')], {
-    cwd: directory, env: {...process.env, PORT: String(frontendPort), BACKEND_URL: backendUrl, KEYCLOAK_URL: '',
+    cwd: directory, env: {...process.env, PORT: String(frontendPort), BACKEND_URL: backendUrl, ITSM_MOCK_URL: itsmUrl, KEYCLOAK_URL: '',
       MCC_STATE_DIR: join(directory, 'workspace'), MCC_GROUP_MODEL: ''},
   })
   gateway = server.child

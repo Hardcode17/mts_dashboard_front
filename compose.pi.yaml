@@ -1,6 +1,7 @@
 services:
   frontend:
     environment:
+      ITSM_MOCK_URL: http://itsm-mock:8080
       KEYCLOAK_URL: http://keycloak:8080
       OIDC_AUTHORITY: ${OIDC_AUTHORITY:?Set FRONTEND_OIDC_AUTHORITY to the public Keycloak realm URL}
     networks:

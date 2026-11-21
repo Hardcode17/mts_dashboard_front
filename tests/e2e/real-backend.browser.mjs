@@ -167,8 +167,14 @@ test('real browser: Keycloak PKCE, incident queues/card, PATCH to ITSM and exact
   const source = page.locator('details.incident-source-details')
   await expect(source.getByText(critical.service, {exact: true})).toBeVisible()
   await expect(source.getByText(critical.serviceType, {exact: true})).toBeVisible()
-  await expect(source.getByRole('link', {name: /Карточка ITSM/}))
-    .toHaveAttribute('href', `${itsm}/itsm_incident/${critical.id}/page`)
+  const incidentPage = frontend + '/itsm_incident/' + critical.id + '/page'
+  await expect(source.getByRole('link', {name: /Карточка ITSM/})).toHaveAttribute('href', incidentPage)
+  const html = await page.request.get(incidentPage)
+  assert.equal(html.status(), 200)
+  assert.match(html.headers()['content-type'], /^text\/html/)
+  assert((await html.text()).includes(critical.id))
+  assert.equal((await page.request.post(incidentPage)).status(), 404)
+  assert.equal((await page.request.get(frontend + '/itsm_incident/invalid/page')).status(), 404)
 
   await page.goto(frontend + '/#incident/' + high.id)
   const highCard = await readBackend(listPath + '/' + high.id)
