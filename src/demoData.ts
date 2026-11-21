@@ -1,5 +1,6 @@
 import type {CardRevision} from './incidentHistory.ts'
 import type {IncidentGroup} from './entities/incident/model/api-types.ts'
+import type {DeadlineRisk} from './deadlineRisk.ts'
 import {usesRealBackend} from './shared/api/mode.ts'
 
 export interface Incident {
@@ -32,6 +33,7 @@ export interface Incident {
   flags?: string[]
   dueAt?: number | null
   deadlineStatus?: {remainingSeconds: number; overdue: boolean; observedAt: number}
+  deadlineRisk?: DeadlineRisk
   site?:string
   specialists?: number
   workMinutes?:number

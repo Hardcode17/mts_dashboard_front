@@ -3,6 +3,7 @@ import {Chart, type ChartData} from '@gravity-ui/charts'
 import {Button, Card, Flex, Label, Link, Tab, TabList, TabPanel, TabProvider, Text} from '@gravity-ui/uikit'
 import type {Incident} from './demoData'
 import {AgentInvestigation} from './AgentInvestigation'
+import {DeadlineRiskPanel} from './DeadlineRiskPanel'
 import {IncidentChronology} from './ChangeHistory'
 import {InvestigationAction} from './InvestigationAction'
 import {cardCoordination, groupHref} from './control-room/attention'
@@ -56,6 +57,7 @@ function Assignment({
   return (
     <Card className="incident-brief ops-assignment" view="outlined" aria-label="Назначение и срок">
       <IncidentDeadline incident={incident} />
+      <DeadlineRiskPanel incident={incident} />
       <dl className="incident-brief-facts">
         <div>
           <dt>Координатор смены</dt>
