@@ -10,6 +10,8 @@ const samples: Readonly<Record<string, Sample | undefined>> = {
   INC000021940126: {kind: 'auth', failures: 50, profileTimeouts: 47, timeoutMs: 1500},
 }
 
+export const unknownTechnicalRecipient = 'Технический адресат не подтверждён'
+
 interface Evidence {
   source: string
   finding: string
@@ -28,7 +30,7 @@ export function analyzeDemoIncident(
     },
   ]
   let hypothesis: string | null = null
-  let recipient = incident.team
+  let recipient = unknownTechnicalRecipient
   let question =
     'Для какой операции виден сбой? Пришлите время и идентификатор одного запроса, чтобы найти его в логах.'
   let next = 'Сопоставить запрос с трассировкой и метриками продукта за тот же интервал.'

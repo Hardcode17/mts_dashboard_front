@@ -1,0 +1,488 @@
+/* Shared shell and panel surfaces for every working route, including direct INC links. */
+.ops-console {
+  --mcc-bg: var(--cr-bg);
+  --mcc-surface: var(--cr-panel);
+  --mcc-hairline: var(--cr-line);
+  --g-button-border-radius: var(--g-border-radius-s);
+  --g-text-input-border-radius: var(--g-border-radius-s);
+}
+.ops-console .workspace {
+  max-width: 1800px;
+  padding: var(--g-spacing-5);
+  margin-inline: auto;
+}
+.ops-console .mcc-glass {
+  --g-card-border-radius: 3px;
+  background: var(--cr-panel);
+  border: 1px solid var(--cr-line);
+  border-radius: var(--g-card-border-radius);
+}
+.ops-console .overview-heading {
+  margin-bottom: var(--g-spacing-4);
+}
+.ops-console .overview-heading p {
+  font: 12px/1.4 var(--cr-mono);
+  margin-top: var(--g-spacing-1);
+}
+.ops-console .cr-live[data-stale='true'] {
+  color: var(--cr-amber);
+}
+.ops-console .cr-live[data-stale='true'] i {
+  background: var(--cr-amber);
+}
+.ops-rail {
+  justify-content: flex-start;
+}
+.ops-primary a i {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2rem;
+  font-style: normal;
+  font-size: 16px;
+}
+.ops-console .ops-queue-nav a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--g-spacing-1) var(--g-spacing-2);
+  align-items: center;
+}
+.ops-queue-nav a:last-child:not(.overview-stat) {
+  display: flex;
+}
+.ops-queue-nav .overview-stat::after {
+  content: none;
+}
+.ops-queue-nav .queue-counts {
+  grid-column: 2/-1;
+  gap: var(--g-spacing-1) var(--g-spacing-2);
+  font: 11px/1.3 var(--cr-mono);
+}
+.ops-queue-nav .queue-counts > span {
+  position: absolute;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.ops-queue-nav .queue-counts:has([data-changed='true']) {
+  color: var(--cr-text);
+}
+.ops-queue-nav .queue-counts:not(:has([data-changed='true'])) {
+  display: none;
+}
+.ops-console .cr-nav .overview-nav-count {
+  font: 500 13px/1.2 var(--cr-mono);
+  color: var(--accent);
+}
+.ops-console .cr-nav-bottom {
+  margin-top: auto;
+  margin-bottom: 0;
+  display: grid;
+  justify-content: stretch;
+}
+.ops-console .cr-nav-bottom .cr-lab {
+  display: flex;
+}
+.ops-console .cr-nav-bottom .cr-muted {
+  display: block;
+}
+.ops-board,
+.ops-critical-section,
+.ops-console .overview-summary,
+.ops-wall-summary {
+  min-width: 0;
+}
+.ops-console :is(.overview-summary, .ops-wall-summary) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--g-spacing-4);
+}
+.ops-console .overview-section-stack > section:focus-visible {
+  outline: 2px solid var(--g-color-line-focus);
+  outline-offset: -2px;
+}
+.ops-critical-section {
+  display: grid;
+  gap: var(--g-spacing-3);
+}
+.ops-console .overview-section-stack,
+.ops-console .shift-layout,
+.ops-console .desk-grid,
+.ops-console .incident-columns,
+.ops-console .incident-evidence {
+  gap: var(--g-spacing-3);
+}
+.ops-console .overview-section-stack .overview-table-panel {
+  scroll-margin-top: 72px;
+}
+.ops-console .overview-table-toolbar,
+.ops-console .incident-panel,
+.ops-console .shift-chart {
+  padding: var(--g-spacing-4);
+}
+.ops-console .overview-table-toolbar {
+  gap: var(--g-spacing-3);
+}
+.ops-console .queue-filters {
+  padding-inline: var(--g-spacing-4);
+}
+.ops-console .overview-table-panel {
+  border-top: 2px solid var(--queue-color, var(--cr-line));
+}
+.ops-console .overview-table-panel .overview-nav-icon {
+  color: var(--queue-color);
+  background: transparent;
+}
+.ops-console .overview-table-footer,
+.ops-console .overview-cell time,
+.ops-console .history-entry time,
+.ops-console .shift-stream-time,
+.ops-console .shift-countdown {
+  font-family: var(--cr-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ops-console .overview-table-footer {
+  font-size: 12px;
+}
+.ops-console .overview-cell-symptom {
+  color: var(--cr-muted);
+}
+.ops-console .change-strip,
+.ops-console .desk-alert,
+.ops-console .pending-signals {
+  border-radius: 2px;
+  border-left: 3px solid var(--cr-blue);
+  justify-content: flex-start;
+}
+.ops-console .change-strip {
+  background: var(--cr-panel);
+  border-block: 1px solid var(--cr-line);
+}
+.ops-console .desk-alert,
+.ops-console .pending-signals {
+  border-left-color: var(--g-color-text-danger);
+}
+.ops-console .queue-counts [data-direction='in'][data-changed='true'] {
+  color: var(--cr-red);
+}
+.ops-console .queue-counts [data-direction='out'][data-changed='true'] {
+  color: var(--cr-green);
+}
+.ops-console .cr-event.assign {
+  --accent: var(--cr-blue);
+}
+.ops-console .cr-event.due {
+  --accent: var(--cr-amber);
+}
+.ops-console .cr-choices {
+  flex-wrap: wrap;
+}
+.ops-console .shift-stream-symbol,
+.ops-console .overview-nav-icon {
+  border-radius: 2px;
+}
+.ops-console .incident-tabs,
+.ops-console .desk-tabs {
+  border-bottom: 1px solid var(--cr-line);
+}
+.ops-console .incident-view h1,
+.ops-console .workspace-shift h1 {
+  font:
+    700 clamp(23px, 2vw, 32px) / 1.2 'MTS Wide',
+    sans-serif;
+}
+.ops-console .incident-tab-area,
+.ops-console .desk-stack,
+.ops-console .shift-task-description {
+  min-width: 0;
+}
+.ops-console .incident-next-step,
+.ops-console .shift-coordinator,
+.ops-console .official-edit {
+  border-top: 2px solid var(--cr-blue);
+}
+.ops-console .meeting-panel,
+.ops-console .shift-message-composer {
+  border-top: 2px solid var(--cr-green);
+}
+.ops-console .incident-hypothesis,
+.ops-console .agent-diagnostics {
+  border-top: 2px solid var(--g-color-text-utility);
+}
+.ops-console .shift-queue {
+  border-top: 2px solid var(--cr-amber);
+}
+.ops-console .report-text,
+.ops-console .history-values,
+.ops-console .meeting-timeline {
+  font-variant-numeric: tabular-nums;
+}
+.ops-console .shift-task,
+.ops-console .desk-list > li {
+  border-color: var(--cr-line);
+}
+.ops-console a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ops-console .cr-nav a:hover,
+.ops-console .cr-event:hover {
+  text-decoration: none;
+}
+.ops-console .cr-work a.g-button {
+  text-decoration: none;
+}
+.ops-loading {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  justify-content: center;
+}
+.quick-card {
+  border-inline-start: 2px solid var(--g-color-text-info);
+  border-radius: 0;
+}
+.quick-fields dt {
+  font-size: var(--g-text-caption-2-font-size);
+}
+.signal-screen .signal-item {
+  border-radius: 3px;
+  border-left: 3px solid var(--g-color-base-danger-heavy);
+}
+.signal-screen .signal-item time,
+.quick-card > div:first-child {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 63rem) {
+  .ops-console .cr-shell {
+    display: block;
+  }
+  .ops-console .ops-rail {
+    gap: var(--g-spacing-1);
+  }
+  .ops-console .ops-rail-queues:not(.on-board) {
+    display: none;
+  }
+  .ops-console .ops-queue-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--g-spacing-1);
+    flex-wrap: wrap;
+  }
+  .ops-console .ops-queue-nav h2 {
+    display: none;
+  }
+  .ops-console .ops-queue-nav a {
+    display: inline-flex;
+    flex-wrap: wrap;
+  }
+  .ops-console .ops-queue-nav .queue-counts {
+    display: none;
+  }
+  .ops-console .cr-nav-bottom {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin: 0;
+    padding-block: var(--g-spacing-1);
+  }
+  .ops-console .cr-nav-bottom .cr-lab {
+    font-size: 10px;
+  }
+}
+@media (max-width: 48rem) {
+  .ops-console .cr-work {
+    padding: var(--g-spacing-3);
+  }
+  .ops-console .overview-heading {
+    gap: var(--g-spacing-2);
+  }
+  .ops-console .overview-table-toolbar,
+  .ops-console .incident-panel,
+  .ops-console .shift-chart {
+    padding: var(--g-spacing-4);
+  }
+  .ops-console .overview-section-stack .overview-table-panel {
+    scroll-margin-top: 60px;
+  }
+  .ops-console .ops-rail nav a {
+    padding-inline: var(--g-spacing-1);
+  }
+  .ops-primary a i {
+    display: none;
+  }
+}
+@media (max-width: 25rem) {
+  .ops-console .cr-brand {
+    gap: var(--g-spacing-1);
+  }
+  .ops-console .cr-top-status {
+    gap: var(--g-spacing-1);
+  }
+  .ops-console .cr-live {
+    display: none;
+  }
+  .ops-console .cr-nav-bottom {
+    flex-wrap: wrap;
+  }
+}
+.ops-console .ops-queue-nav a > span:not(.queue-counts) {
+  font: inherit;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ops-console .ops-queue-nav .queue-counts {
+  font: 11px/1.4 var(--cr-mono);
+}
+.ops-console .ops-queue-nav a {
+  padding-block: var(--g-spacing-2);
+}
+.ops-console .ops-incident-header,
+.ops-console .ops-agent-header {
+  border-block-end: 1px solid var(--cr-line);
+  padding-block-end: var(--g-spacing-4);
+}
+.ops-console .ops-assignment {
+  border-top: 2px solid var(--cr-amber);
+}
+.ops-due-time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--g-spacing-2);
+  font-family: var(--cr-mono);
+}
+.ops-due-time strong {
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 500;
+}
+.ops-due-time span,
+.cr-quiet {
+  color: var(--cr-muted);
+  font-size: 12px;
+}
+.cr-quiet {
+  margin-left: auto;
+  max-width: 16ch;
+  text-align: end;
+}
+.ops-console .q-critical,
+.ops-console .overview-kind-critical {
+  --mcc-critical: var(--cr-red);
+}
+@media (max-width: 48rem) {
+  .ops-console .cr-top {
+    flex-wrap: wrap;
+    padding-block-start: var(--g-spacing-1);
+    gap: var(--g-spacing-1);
+  }
+  .ops-console .cr-strip {
+    order: 3;
+    display: flex;
+    justify-content: space-between;
+    flex: 1 0 100%;
+    padding: var(--g-spacing-1) 0;
+    border: 0;
+    border-top: 1px solid var(--cr-line);
+    font-size: 11px;
+  }
+  .ops-console .cr-strip span + span {
+    border: 0;
+  }
+  .ops-console .overview-section-stack .overview-table-panel {
+    scroll-margin-top: 76px;
+  }
+}
+.ops-console .ops-queue-nav > a > span:not(.queue-counts) {
+  font-family: 'MTS Text', sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: normal;
+}
+.ops-console .workspace a.g-link:not(.overview-nav-log):not(.shift-stream-entry):not(.overview-tile-link) {
+  color: var(--cr-blue);
+}
+.ops-console .workspace .desk-tabs a[aria-current='page'] {
+  color: var(--cr-text);
+}
+.ops-console .workspace a.incident-number {
+  color: var(--cr-text);
+}
+.ops-console #feed,
+.ops-console #attention {
+  scroll-margin-top: 72px;
+}
+.ops-section-head,
+.ops-section-volume,
+.ops-section-head h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--g-spacing-3);
+}
+.ops-section-head {
+  justify-content: space-between;
+}
+.ops-section-head h2 {
+  margin: 0;
+}
+.ops-section-head h2 i {
+  width: 7px;
+  height: 7px;
+  background: var(--queue-color);
+}
+.ops-section-volume .queue-counts {
+  font: 12px/1.5 var(--cr-mono);
+}
+.ops-total {
+  color: var(--queue-color);
+  font: 500 20px/1.2 var(--cr-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ops-console .shift-stream-event {
+  border-left: 2px solid var(--stream-ink);
+  padding-inline-start: var(--g-spacing-2);
+}
+.ops-console .incident-journal-row > time,
+.ops-console .history-entry time,
+.ops-console .meeting-timeline time,
+.ops-console .incident-readings dd {
+  font-family: var(--cr-mono);
+}
+.ops-console .workspace .incident-tabs,
+.ops-console .desk-tabs,
+.ops-console [id^='work-'] {
+  scroll-margin-top: 76px;
+}
+.ops-console .incident-path li {
+  border-radius: 3px;
+  background: var(--cr-soft);
+}
+.ops-console .incident-impact-chart {
+  --mcc-critical: var(--cr-red);
+}
+.ops-console :is(.desk-grid, .desk-stack, .shift-layout, .incident-columns, .incident-evidence) > * {
+  min-width: 0;
+}
+@media (max-width: 63rem) {
+  .ops-console .ops-rail-queues.on-board .queue-counts:has([data-changed='true']) {
+    display: flex;
+  }
+}
+.ops-console .overview-heading {scroll-margin-top:75px;}
+@media (max-width:63rem) {
+  .ops-console .ops-queue-nav > a > .queue-counts {display:none;}
+  .ops-console .ops-queue-nav > a > .queue-counts:has([data-changed=true]) {display:flex;}
+}
+.ops-mobile-queue-toggle {display:none;}
+@media(max-width:63rem) {
+  .ops-console .ops-mobile-queue-toggle {display:inline-flex;align-self:flex-start;}
+  .ops-console .cr-nav-bottom {font-size:11px;}
+}
+
+.ops-console .ops-detail-menu {display: none;}
+@media (max-width: 48rem) {
+  .ops-console .ops-detail-rail .ops-detail-menu {display: inline-flex; align-self: flex-start;}
+  .ops-console .ops-detail-rail[data-menu-open="false"] > :not(.ops-detail-menu) {display: none;}
+}

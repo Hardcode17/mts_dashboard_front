@@ -1,15 +1,22 @@
 import {useState} from 'react'
-import {Button, Card, Flex, Label, Link, Select, Text, TextInput} from '@gravity-ui/uikit'
+import {Button, Card, Flex, Label, Link, Text, TextInput} from '@gravity-ui/uikit'
 import type {Incident} from '../demoData'
 import {useWorkspace} from './context'
+import {approvedTeam, technicalTeam} from './types'
 
 export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) {
-  const {desk, act} = useWorkspace(),
+  const {desk, act, person, busy, itsmExternal} = useWorkspace(),
     work = desk.work[item.key],
     availability = work?.availability ?? 'unknown'
-  const name = item.site === 'Ростов' ? 'Сетевая поддержка · Ростов' : past?.team || item.team
-  const [team, setTeam] = useState(name),
+  const name = item.site === 'Ростов' ? 'Сетевая поддержка · Ростов' : technicalTeam(past?.team) || technicalTeam(item.team)
+  const saved = approvedTeam(work, name)
+  const [draft, setTeam] = useState<string | undefined>(),
     [reason, setReason] = useState('')
+  const team = draft ?? (saved || name)
+  const targetTeam = technicalTeam(team)
+  const myAttempt = desk.tasks.find(t => t.key === item.key && !t.finished)?.attempts.at(-1)
+  const canHandOff = myAttempt?.person === person && myAttempt.accepted && !myAttempt.ended
+  const [sent, setSent] = useState(false)
   const measured = Boolean(past?.specialists && past.workMinutes)
   const wait = availability === 'ready' ? 0 : availability === 'wait' ? 60 : null
   return (
@@ -31,7 +38,7 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
         <Text>Нет сопоставимого завершённого случая. Уточните владельца и доступность команды.</Text>
       )}
       <Text>
-        Адресат: {name || 'уточнить владельца'}.{' '}
+        Предлагаемая группа — {name || 'требуется уточнить владельца'}.{' '}
         {measured
           ? 'Опыт прошлого случая: ' +
             past!.specialists +
@@ -42,18 +49,6 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
       </Text>
       {measured && (
         <>
-          <div className="mcc-field">
-            <label htmlFor="advisor-availability">Доступность по графику стенда</label>
-            <Select id="advisor-availability" width="max"
-              value={[availability]}
-              options={[
-                {value: 'ready', content: 'Трое свободны'},
-                {value: 'wait', content: 'Двое свободны, третий через час'},
-                {value: 'unknown', content: 'Нет ответа о доступности'},
-              ]}
-              onUpdate={([v]) => void act({type: 'advisor', key: item.key, kind: 'availability', value: v})}
-            />
-          </div>
           <Text>
             {wait === null
               ? 'Ожидание неизвестно. Спросить старшего смены, когда будет полный состав.'
@@ -70,7 +65,7 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
       <div className="incident-fields">
         <div className="mcc-field">
           <label htmlFor="advisor-team">Предлагаемая команда</label>
-          <TextInput id="advisor-team" value={team} onUpdate={setTeam} />
+          <TextInput id="advisor-team" value={team} onUpdate={value => {setSent(false); setTeam(value)}} />
         </div>
         <div className="mcc-field">
           <label htmlFor="advisor-comment">Комментарий координатора</label>
@@ -79,11 +74,11 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
       </div>
       <Flex gap="spacing-2" wrap>
         <Button
-          disabled={!team.trim()}
+          disabled={!targetTeam || busy}
           onClick={() =>
             void act({
               type: 'advisor',
-              key: item.key,
+              key: item.key, person, kind: 'accept', value: targetTeam,
               text: (team === name ? 'Принято: ' : 'Уточнено: ') + team + (reason ? ' · ' + reason : ''),
             })
           }
@@ -92,13 +87,20 @@ export function RoutingAdvisor({item, past}: {item: Incident; past?: Incident}) 
         </Button>
         <Button
           onClick={() =>
-            void act({type: 'advisor', key: item.key, text: 'Отклонено' + (reason ? ': ' + reason : '')})
+            void act({type: 'advisor', key: item.key, person, kind: 'reject', text: 'Отклонено' + (reason ? ': ' + reason : '')})
           }
         >
           Отклонить
         </Button>
       </Flex>
       {work?.recommendation && <Text role="status">{work.recommendation}</Text>}
+      {targetTeam && !sent && (canHandOff ? (
+        <Button view="action" disabled={busy} onClick={async () => {
+          const ok = await act({type:'handoff', key:item.key, person, id:myAttempt.id, value:targetTeam, expected:item.updatedAt ?? 0})
+          if (ok) setSent(true)
+        }}>Передать исполнителю</Button>
+      ) : <Link href={'#itsm/' + encodeURIComponent(item.key) + '?team=' + encodeURIComponent(targetTeam)}>Изменить назначение в ITSM</Link>)}
+      {sent && <Text role="status">{itsmExternal ? 'ITSM подтвердила назначение' : 'Назначение на стенде'} · {desk.records[item.key]?.team ?? item.team}</Text>}
     </Card>
   )
 }

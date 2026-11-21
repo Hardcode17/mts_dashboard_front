@@ -20,6 +20,8 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: mts-dashboard-front
       FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8080' }}
+      MCC_KEYCLOAK_URL: ${{ vars.MCC_KEYCLOAK_URL || 'http://localhost:8084' }}
+      MCC_AUTH_ME_URL: ${{ vars.MCC_AUTH_ME_URL || 'http://host.docker.internal:8091/api/me' }}
     defaults:
       run:
         shell: bash
@@ -53,6 +55,7 @@ jobs:
           import os
           import re
           import subprocess
+          from urllib.error import HTTPError
           from urllib.request import urlopen
 
           origin = "http://127.0.0.1:" + os.environ["FRONTEND_PORT"]
@@ -73,17 +76,25 @@ jobs:
           if not bundle:
               raise SystemExit("Frontend entry bundle missing")
           check_asset(bundle[1], "dist" + bundle[1])
-          desk = json.loads(fetch("/api/stand/snapshot?mode=case"))["desk"]
-          if desk["mode"] != "case" or desk["sourceError"] or not isinstance(desk["records"], dict):
-              raise SystemExit("Incident source unavailable")
-          print(f"Published port {os.environ['FRONTEND_PORT']}: HTML and {bundle[1]} match the running image; API returned {len(desk['records'])} incidents")
+          try:
+              fetch("/api/stand/snapshot?mode=case")
+          except HTTPError as error:
+              if error.code != 401 or not error.headers.get("WWW-Authenticate", "").startswith("Bearer"):
+                  raise
+          else:
+              raise SystemExit("Workspace API accepted an anonymous request")
+          print(f"Published HTML and {bundle[1]} match the running image; anonymous workspace API returned 401")
           PY
 
-      - name: Open the published agent form in Chromium
+      - name: Verify Keycloak login and the published workspace in Chromium
+        env:
+          MCC_PUBLIC_ORIGIN: ${{ vars.MCC_PUBLIC_ORIGIN }}
+          MCC_SMOKE_USERNAME: ${{ secrets.MCC_SMOKE_USERNAME }}
+          MCC_SMOKE_PASSWORD: ${{ secrets.MCC_SMOKE_PASSWORD }}
         timeout-minutes: 10
         run: |
           docker build --target stand-browser --tag mts-dashboard-front-stand-browser .
-          docker run --rm --network host --shm-size=256m --env FRONTEND_PORT mts-dashboard-front-stand-browser
+          docker run --rm --network host --shm-size=256m --env FRONTEND_PORT --env MCC_PUBLIC_ORIGIN --env MCC_KEYCLOAK_URL --env MCC_SMOKE_USERNAME --env MCC_SMOKE_PASSWORD mts-dashboard-front-stand-browser
 
       - name: Show deployment status
         run: docker compose ps

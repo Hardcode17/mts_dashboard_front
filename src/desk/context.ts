@@ -11,7 +11,7 @@ export function useWorkspace() {
 }
 
 export const RelatedIndex = createContext<Map<string, Incident[]>>(new Map())
-export function useRelated(item: Incident) {
+export function useRelated(item: Incident, excludeMembers?: readonly string[]) {
   const index = useContext(RelatedIndex)
-  return useMemo(() => similarIncidents(index, item), [index, item])
+  return useMemo(() => similarIncidents(index, item, excludeMembers && new Set(excludeMembers)), [index, item, excludeMembers])
 }

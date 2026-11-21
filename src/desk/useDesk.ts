@@ -1,3 +1,4 @@
+import {workspaceFetch} from '../auth/session'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import type {Command, Desk, Source} from './types'
 
@@ -7,9 +8,13 @@ interface Reply {
   checked: number
   now: number
   error?: string
+  itsmExternal?: boolean
 }
 function linkedSource(): Source | undefined {
-  const {hash} = window.location
+  const {hash, search} = window.location
+  const params = new URLSearchParams(search)
+  const selected = params.get('dataset')
+  if((!/^#(?:evidence|investigation)\//.test(hash) || !hash.includes('dataset=')) && (selected==='case'||selected==='volume')) return selected
   if (!/^#(?:evidence|investigation)\//.test(hash)) return
   const value = new URLSearchParams(hash.split('?')[1]).get('dataset')
   return value === 'volume' || value === 'case' ? value : undefined
@@ -22,6 +27,7 @@ export function useDesk() {
   const [person, setPerson] = useState(() => localStorage.getItem('mcc-person') || 'anna')
   const [desk, setDesk] = useState<Desk | null>(null)
   const [now, setNow] = useState(Date.now)
+  const [itsmExternal, setItsmExternal] = useState(false)
   const [checked, setChecked] = useState(0),
     [error, setError] = useState(''),
     [actionError, setActionError] = useState('')
@@ -34,6 +40,7 @@ export function useDesk() {
       current.current.version = reply.version
       setDesk(reply.desk)
     }
+    if (reply.itsmExternal !== undefined) setItsmExternal(reply.itsmExternal)
     setChecked(reply.checked)
     clockOffset.current = reply.now - Date.now()
     setNow(reply.now)
@@ -43,7 +50,7 @@ export function useDesk() {
     async (signal?: AbortSignal) => {
       const snapshot = current.current
       try {
-        const r = await fetch('/api/stand/snapshot?mode=' + snapshot.mode + '&since=' + snapshot.version, {
+        const r = await workspaceFetch('/api/stand/snapshot?mode=' + snapshot.mode + '&since=' + snapshot.version, {
           signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
           cache: 'no-store',
         })
@@ -72,7 +79,7 @@ export function useDesk() {
     setBusy(true)
     setActionError('')
     try {
-      const r = await fetch('/api/stand/action?mode=' + source, {
+      const r = await workspaceFetch('/api/stand/action?mode=' + source, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(command),
@@ -109,8 +116,13 @@ export function useDesk() {
     return () => window.removeEventListener('hashchange', followLink)
   }, [selectSource])
   function source(value: Source) {
+    const url=new URL(window.location.href)
+    if(url.searchParams.has('dataset')){
+      url.searchParams.set('dataset',value)
+      history.replaceState(history.state,'',url)
+    }
     selectSource(value)
-    location.hash = 'desk/source'
+    location.hash = 'stand'
   }
   function login(value: string) {
     localStorage.setItem('mcc-person', value)
@@ -124,6 +136,7 @@ export function useDesk() {
     login,
     now,
     checked,
+    itsmExternal,
     error,
     actionError,
     busy,

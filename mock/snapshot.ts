@@ -1,5 +1,5 @@
 import type {Incident} from '../src/demoData.ts'
-import {moscowTime, coordinatorGroup} from '../src/desk/types.ts'
+import {moscowTime, coordinatorGroup, externalHttpAddress} from '../src/desk/types.ts'
 const status: Record<string, string> = {
   Assigned: 'Назначен',
   WorkInProgress: 'Выполняется',
@@ -25,6 +25,10 @@ export function parseSnapshot(raw: unknown): Incident[] {
         t = Date.parse(s)
       return Number.isFinite(t) ? t : error(f)
     }
+    const optional = (field: string): string | undefined => {
+      if (row[field] == null || row[field] === '') return undefined
+      return typeof row[field] === 'string' ? row[field].trim() || undefined : error(field)
+    }
     const id = required('id')
     if (!/^INC[\d-]+$/i.test(id) || ids.has(id)) error('id (уникальный номер INC)')
     ids.add(id)
@@ -39,6 +43,14 @@ export function parseSnapshot(raw: unknown): Incident[] {
     const team = typeof row.assignedGroupName === 'string' ? row.assignedGroupName : ''
     const item: Incident = {
       key: id,
+      sysId: optional('sysId'),
+      assigneeLogin: optional('assignedEmployeeLogin'),
+      meetingUrl: row.meetingUrl === undefined ? undefined : externalHttpAddress(row.meetingUrl),
+      itsmUrl: row.itsmUrl === undefined ? undefined : externalHttpAddress(row.itsmUrl),
+      itsmDemo: typeof row.itsmDemo === 'boolean' ? row.itsmDemo : undefined,
+      parentId: row.parentId === null ? null : optional('parentId'),
+      upstreamService: optional('upstreamService'),
+      errorCode: optional('errorCode'),
       id,
       title: required('header'),
       product: required('productName'),

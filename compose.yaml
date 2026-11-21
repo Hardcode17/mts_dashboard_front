@@ -6,6 +6,15 @@ services:
         org.opencontainers.image.revision: "${GITHUB_SHA:-local}"
     ports:
       - "${FRONTEND_PORT:-8080}:3000"
+    environment:
+      MCC_KEYCLOAK_URL: ${MCC_KEYCLOAK_URL:-http://localhost:8084}
+      MCC_KEYCLOAK_REALM: ${MCC_KEYCLOAK_REALM:-dashboard}
+      MCC_KEYCLOAK_CLIENT_ID: ${MCC_KEYCLOAK_CLIENT_ID:-dashboard-web}
+      MCC_AUTH_ME_URL: ${MCC_AUTH_ME_URL:-http://host.docker.internal:8091/api/me}
+      MCC_GROUP_MODEL: ${MCC_GROUP_MODEL:-}
+      MCC_OLLAMA_URL: ${MCC_OLLAMA_URL:-http://127.0.0.1:11434}
+      MCC_ITSM_URL: ${MCC_ITSM_URL:-}
+      MCC_DASHBOARD_URL: ${MCC_DASHBOARD_URL:-}
     restart: unless-stopped
     volumes:
       - mcc-stand:/app/.mcc-stand

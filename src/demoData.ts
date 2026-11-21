@@ -1,6 +1,14 @@
 import type {CardRevision} from './incidentHistory.ts'
 
 export interface Incident {
+  sysId?: string
+  assigneeLogin?: string
+  meetingUrl?: string | null
+  itsmUrl?: string | null
+  itsmDemo?: boolean
+  parentId?: string | null
+  upstreamService?: string
+  errorCode?: string
   key: string
   id: string
   title: string

@@ -11,6 +11,7 @@ ENV CHROMIUM_PATH=/usr/bin/chromium
 WORKDIR /check
 COPY --from=build /app/node_modules/playwright-core ./node_modules/playwright-core
 COPY tests/agent-form-smoke.mjs .
+COPY tests/support/browser-login.mjs ./support/browser-login.mjs
 USER node
 CMD ["node", "agent-form-smoke.mjs"]
 
@@ -24,7 +25,7 @@ COPY --from=build /app/dist ./dist
 COPY mock ./mock
 COPY src/demoData.ts ./src/demoData.ts
 COPY src/agentDemo.ts ./src/agentDemo.ts
-COPY src/desk/types.ts src/desk/recovery.ts ./src/desk/
+COPY src/desk/types.ts src/desk/recovery.ts src/desk/order.ts src/desk/assignmentCycle.ts ./src/desk/
 RUN mkdir -p .mcc-stand && chown node:node .mcc-stand
 USER node
 EXPOSE 3000
