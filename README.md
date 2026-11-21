@@ -56,6 +56,32 @@ npm run dev
 | Вход | Демонстрационный профиль | Keycloak, клиент `dashboard-web` |
 | Состояние | SQLite на стенде | Снимок и статус backend |
 
+## Локальный поиск маршрутизации (KAN-74)
+
+В карточке на вкладке «Работа смены» есть отдельный блок «Поиск по локальной истории». Он появляется только при явном opt-in и обращается к локальному HTTP-адаптеру PostgreSQL + pgvector; это не демо-рекомендация и не продуктовый прокси. Порядок запуска адаптера и проверка реальной БД описаны в [инструкции в репозитории data](https://github.com/Hardcode17/mts_dashboard_data/blob/main/docs/co-coordinator.md).
+
+```sh
+# терминал 1: адаптер из data-worktree, слушает 127.0.0.1:8747
+cd ../data/prototypes/routing-advisor
+ROUTING_DSN='postgresql://routing_advisor:<пароль>@127.0.0.1:5447/routing_advisor' \
+ROUTING_MODEL='intfloat/multilingual-e5-small' \
+python server.py
+
+# терминал 2: в этом worktree frontend, с same-origin прокси Vite
+ROUTING_ADVISOR_URL=http://127.0.0.1:8747 \
+VITE_ROUTING_ADVISOR_ENABLED=true \
+npm run dev
+```
+
+Для preview сначала соберите фронтенд с клиентским флагом, затем запустите preview с серверным адресом:
+
+```sh
+VITE_ROUTING_ADVISOR_ENABLED=true npm run build
+ROUTING_ADVISOR_URL=http://127.0.0.1:8747 VITE_ROUTING_ADVISOR_ENABLED=true npm run preview
+```
+
+Браузер делает запросы только на same-origin `/routing-advisor/*`; Vite dev/preview проксирует их на loopback-адрес. `ROUTING_ADVISOR_URL` принимается только для `127.0.0.1`, `localhost` или `[::1]`. Блок доступен в локальном режиме с `VITE_ROUTING_ADVISOR_ENABLED=true` и настроенным прокси Vite. Для раздачи через `npm start` используйте сборку без opt-in. В API-режиме (`VITE_API_URL`/`VITE_BACKEND_MODE=real`) блок скрыт. `server/start.mjs`, Compose и CI не меняются.
+
 ### Подключение backend
 
 1. В [репозитории бэкенда](https://github.com/Hardcode17/mts_dashboard_backend) запустите локальный стенд Keycloak, выдайте допуск координатору и загрузите тестовый снимок.
@@ -82,6 +108,8 @@ npm run dev -- --host localhost --port 3000
 | `VITE_BACKEND_MODE=real` | dev / build | API-режим без прокси Vite |
 | `VITE_OIDC_AUTHORITY` | dev / build | URL realm Keycloak, например `https://auth.example.test/realms/dashboard` |
 | `VITE_ITSC_URL` | dev / build | Необязательный HTTPS-origin внешней ITSM-карточки |
+| `VITE_ROUTING_ADVISOR_ENABLED` | dev / build | Явный opt-in локального поиска маршрутизации, только `true` |
+| `ROUTING_ADVISOR_URL` | Vite dev / preview | Loopback-origin адаптера, по умолчанию не задан; в браузер не попадает |
 | `BACKEND_URL` | `server/start.mjs` | Origin backend, обязателен для `npm start` |
 | `PORT` | `server/start.mjs` | Порт статики и прокси, по умолчанию `3000` |
 | `MCC_STATE_DIR` | локальный мок | Каталог SQLite |
