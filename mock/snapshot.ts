@@ -1,12 +1,5 @@
 import type {Incident} from '../src/demoData.ts'
-import {moscowTime, coordinatorGroup} from '../src/desk/types.ts'
-const status: Record<string, string> = {
-  Assigned: 'Назначен',
-  WorkInProgress: 'Выполняется',
-  Resolved: 'Завершён',
-  Closed: 'Закрыт',
-  Research: 'Исследование ситуации',
-}
+import {coordinatorGroup, itsmStateLabels, moscowTime} from '../src/desk/types.ts'
 export function parseSnapshot(raw: unknown): Incident[] {
   if (!Array.isArray(raw)) throw Error('Ожидается массив карточек ITSM.')
   const ids = new Set<string>()
@@ -28,7 +21,7 @@ export function parseSnapshot(raw: unknown): Incident[] {
     const id = required('id')
     if (!/^INC[\d-]+$/i.test(id) || ids.has(id)) error('id (уникальный номер INC)')
     ids.add(id)
-    const state = status[required('stateEnum')]
+    const state = (itsmStateLabels as Record<string, string>)[required('stateEnum')]
     if (!state) error('stateEnum')
     const priority = row.priorityId
     if (!Number.isInteger(priority) || priority < 1 || priority > 4) error('priorityId')
