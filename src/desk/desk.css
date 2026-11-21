@@ -12,7 +12,7 @@
 .desk-list li {align-content:start;justify-items:start;gap:var(--g-spacing-2);padding-block:var(--g-spacing-3);border-bottom:1px solid var(--mcc-hairline)}
 .report-text {white-space:pre-line;overflow-wrap:anywhere;line-height:1.6}
 .desk-stack summary,.desk-grid summary {cursor:pointer;color:var(--g-color-text-link)}
-@media(max-width:48rem){.desk-grid{grid-template-columns:1fr}.primary-nav{flex-wrap:wrap}}
+@media(max-width:48rem){.desk-grid{grid-template-columns:1fr}}
 
 .quick-card{box-sizing:border-box;width:min(31rem,100vw);min-height:100%;padding:var(--g-spacing-6);display:flex;align-items:flex-start;flex-direction:column;gap:var(--g-spacing-4);background:var(--mcc-surface);color:var(--g-color-text-primary)}
 .quick-card>div:first-child,.quick-fields{width:100%}.quick-fields{margin:0;display:grid;gap:var(--g-spacing-3)}.quick-fields>div{display:grid;grid-template-columns:7rem 1fr;gap:var(--g-spacing-2)}.quick-fields dt{color:var(--g-color-text-secondary)}.quick-fields dd{margin:0;overflow-wrap:anywhere}.desk-stack>details>*+*{margin-top:var(--g-spacing-3)}
@@ -139,3 +139,40 @@
   overflow-wrap: anywhere;
 }
 .shift-source-changes, .shift-source-status { overflow-wrap: anywhere; }
+
+.incident-work-actions {
+  display: grid;
+  gap: var(--g-spacing-4);
+  min-width: 0;
+}
+.incident-work-actions > nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-spacing-2) var(--g-spacing-4);
+}
+.incident-work-actions > nav > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--g-spacing-8);
+  padding-inline: var(--g-spacing-3);
+  border-radius: var(--g-border-radius-m);
+  background: var(--g-color-base-generic);
+}
+.incident-work-actions > nav > a[aria-expanded="true"] {
+  background: var(--g-color-base-selection);
+  color: var(--g-color-text-primary);
+}
+.incident-work-actions > nav > a:hover {
+  background: var(--g-color-base-generic-hover);
+}
+.shift-notifications { grid-template-columns: minmax(0, 1fr); }
+.shift-handoff .handoff-reason {
+  flex: 1 0 100%;
+  color: var(--g-color-text-secondary);
+}
+.stand-settings .channel-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: var(--g-spacing-3);
+}

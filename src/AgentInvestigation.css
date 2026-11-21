@@ -11,13 +11,16 @@
   grid-template-columns: minmax(0, 32rem) minmax(0, 24rem);
   gap: var(--g-spacing-6) var(--g-spacing-8);
 }
-.agent-diagnostic-section, .agent-outages {
+.agent-diagnostic-section,
+.agent-outages {
   display: grid;
   min-width: 0;
   align-content: start;
   gap: var(--g-spacing-3);
 }
-.agent-outages { justify-items: start; }
+.agent-outages {
+  justify-items: start;
+}
 .agent-intervals {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -31,14 +34,139 @@
   border-block-start: 1px solid var(--mcc-hairline);
   padding-block-start: var(--g-spacing-4);
 }
-.incident-evidence { overflow-wrap: anywhere; }
-.agent-load-field { width: min(100%, 20rem); }
-.agent-source-content, .agent-finding { display: grid; min-width: 0; gap: var(--g-spacing-2); }
-.agent-source-content { justify-items: start; padding-block-start: var(--g-spacing-2); }
-.agent-source-content .agent-record { margin: 0; }
+.incident-evidence {
+  overflow-wrap: anywhere;
+}
+.agent-load-field {
+  width: min(100%, 20rem);
+}
+.agent-source-content,
+.agent-finding {
+  display: grid;
+  min-width: 0;
+  gap: var(--g-spacing-2);
+}
+.agent-source-content {
+  justify-items: start;
+  padding-block-start: var(--g-spacing-2);
+}
+.agent-source-content .agent-record {
+  margin: 0;
+}
 @container (max-width: 43rem) {
-  .agent-diagnostic-groups { grid-template-columns: minmax(0, 1fr); }
+  .agent-diagnostic-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @container (max-width: 25rem) {
-  .agent-intervals { grid-template-columns: minmax(0, 1fr); }
+  .agent-intervals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.agent-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--g-spacing-4);
+  min-width: 0;
+  max-width: 68rem;
+  overflow-wrap: anywhere;
+}
+.agent-run > a {
+  justify-self: start;
+}
+.agent-run-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g-spacing-3) var(--g-spacing-5);
+  padding-block-end: var(--g-spacing-4);
+  border-block-end: 1px solid var(--g-color-line-generic);
+}
+.agent-run-heading > div,
+.agent-run-next,
+.agent-run-empty,
+.agent-run-history,
+.agent-evidence-rows > li {
+  display: grid;
+  gap: var(--g-spacing-2);
+  min-width: 0;
+}
+.agent-run :is(h1, h2, h3, p, dl, dd, ol, ul) {
+  margin: 0;
+}
+.agent-run-decision {
+  display: grid;
+  justify-items: start;
+  gap: var(--g-spacing-3);
+  padding: var(--g-spacing-5);
+  border: 1px solid var(--g-color-line-generic);
+  border-radius: var(--g-border-radius-m);
+  background: var(--g-color-base-float);
+}
+.agent-run-decision > :is(h2, p),
+.agent-run-next {
+  max-width: 72ch;
+}
+.agent-run-facts {
+  display: grid;
+  width: 100%;
+}
+.agent-run-facts > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, 11rem) minmax(0, 1fr);
+  gap: var(--g-spacing-3);
+  padding-block: var(--g-spacing-2);
+  border-block-start: 1px solid var(--g-color-line-generic);
+}
+.agent-run-facts dt {
+  color: var(--g-color-text-secondary);
+}
+.agent-run-details {
+  border-block-end: 1px solid var(--g-color-line-generic);
+  padding-block-end: var(--g-spacing-3);
+}
+.agent-run-details > summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.agent-run-details > summary:focus-visible {
+  outline: 2px solid var(--g-color-line-focus);
+}
+.agent-run-details-body,
+.agent-evidence-rows {
+  display: grid;
+  gap: var(--g-spacing-4);
+  padding: 0;
+}
+.agent-run-details-body {
+  padding-block-start: var(--g-spacing-4);
+}
+.agent-evidence-rows {
+  list-style: none;
+}
+.agent-evidence-rows code {
+  color: var(--g-color-text-secondary);
+  white-space: pre-wrap;
+}
+.agent-evidence-rows a,
+.agent-run-details-body > a {
+  justify-self: start;
+}
+.agent-run-history ul {
+  padding: 0;
+  list-style: none;
+}
+.agent-run-history li {
+  padding-block: var(--g-spacing-1);
+}
+@media (max-width: 38rem) {
+  .agent-run-decision {
+    padding: var(--g-spacing-3);
+  }
+  .agent-run-facts > div {
+    grid-template-columns: minmax(5.5rem, 32%) minmax(0, 1fr);
+  }
 }

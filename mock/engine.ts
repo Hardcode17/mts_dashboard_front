@@ -1,6 +1,9 @@
 import {additionalIncidents, initialIncidents, incidentRevisions, type Incident} from '../src/demoData.ts'
 import {
   active,
+  belongsToQueue,
+  queueKeys,
+  queueWindowMs,
   channels,
   coordinatorGroup,
   dueInstant,
@@ -19,6 +22,7 @@ import type {CardRevision, TrackedField} from '../src/incidentHistory.ts'
 import {analyzeDemoIncident} from '../src/agentDemo.ts'
 import {recoveryTrial, measures} from '../src/desk/recovery.ts'
 import {parseSnapshot} from './snapshot.ts'
+import {editOutageGroup, reconcileGroups} from './incidentGroups.ts'
 
 const base = new Map(initialIncidents.map((i) => [i.key, i]))
 export function lookup(d: Desk, key: string) {
@@ -150,10 +154,41 @@ function appendEvent(
   deliveries(d, i.key, 'shift', change + ' · ' + i.id, now)
 }
 function openCritical(i: Incident) {
-  return active(i) && i.priority === 4
+  return belongsToQueue(i, 'critical')
+}
+function recordMembership(d: Desk, old: Incident | undefined, item: Incident, now: number) {
+  for (const queue of queueKeys) {
+    const entered = belongsToQueue(item, queue)
+    if (entered === belongsToQueue(old, queue)) continue
+    let reason: string
+    if (item.absent) reason = 'Отсутствует в снимке'
+    else if (!old) reason = 'Новый INC'
+    else if (old.absent) reason = 'Снова в снимке'
+    else if (active(old) && !active(item)) reason = 'Сбой устранён'
+    else if (!active(old) && active(item)) reason = 'Возврат в работу'
+    else if (old.priority !== item.priority && (queue === 'high' || queue === 'critical')) reason = 'Изменение приоритета'
+    else if (queue === 'assigned') reason = 'Смена назначения'
+    else reason = 'Смена статуса'
+    const movements = d.movements ??= []
+    movements.push({id: uid(d), key: item.key, queue, at: now, entered, reason})
+  }
 }
 export function applyCard(d: Desk, incoming: Incident, now: number) {
+  return applyCardDetails(d, [incoming], now).length > 0
+}
+export function applyCardDetails(d: Desk, incoming: Incident[], now: number) {
+  const changed = incoming.filter(card => applyCardChange(d, card, now)).map(card => card.key)
+  if (changed.length) reconcileGroups(d, items(d), now)
+  return changed
+}
+function applyCardChange(d: Desk, incoming: Incident, now: number) {
   const old = lookup(d, incoming.key)
+  if (incoming.parentId === undefined && old?.parentId) incoming = {...incoming, parentId:old.parentId}
+  if (old) {
+    for (const key of ['meetingUrl', 'itsmUrl', 'itsmDemo'] as const) {
+      if (incoming[key] === undefined && old[key] !== undefined) incoming = {...incoming, [key]: old[key]}
+    }
+  }
   const comparable = (i: Incident) => JSON.stringify({...i, updatedAt: undefined, absent: undefined})
   if (old && !old.absent && comparable(old) === comparable(incoming)) return false
   const item = {...incoming, updatedAt: Math.max(now, (old?.updatedAt ?? 0) + 1), absent: false}
@@ -185,6 +220,7 @@ export function applyCard(d: Desk, incoming: Incident, now: number) {
         values: patch,
       })
   }
+  recordMembership(d, old, item, now)
   d.records[item.key] = item
   d.lastChanges.unshift({
     id: item.id,
@@ -207,7 +243,9 @@ export function applyCard(d: Desk, incoming: Incident, now: number) {
   return true
 }
 export function applySnapshot(d: Desk, raw: unknown, now: number) {
-  const incoming = parseSnapshot(raw)
+  return applySnapshotCards(d, parseSnapshot(raw), now)
+}
+export function applySnapshotCards(d: Desk, incoming: Incident[], now: number) {
   const first = d.lastImport === 0
   const seen = new Set(incoming.map((i) => i.key))
   let changed = false
@@ -218,16 +256,20 @@ export function applySnapshot(d: Desk, raw: unknown, now: number) {
       d.records[item.key] = {...item, updatedAt: now}
       d.revisions[item.key] = [{observedAt: new Date(now).toISOString(), values: values(item)}]
       if (onCoordinators(item)) enqueue(d, item.key, now)
-    } else if (applyCard(d, item, now)) changed = true
+    } else if (applyCardChange(d, item, now)) changed = true
   }
   for (const item of Object.values(d.records))
     if (!seen.has(item.key) && !item.absent) {
+      recordMembership(d, item, {...item, absent:true}, now)
       item.absent = true
       changed = true
       d.lastChanges.push({id: item.id, fields: ['Отсутствует в свежей выборке']})
     }
   if (!first && !changed) d.lastChanges = last
-  if (first || changed) d.lastImport = now
+  if (first || changed) {
+    d.lastImport = now
+    reconcileGroups(d,items(d),now)
+  }
   const recovered = Boolean(d.sourceError)
   d.sourceError = ''
   return first || changed || recovered
@@ -298,10 +340,15 @@ export function createDesk(mode: Source, now: number): Desk {
     d.work.incident = work
     dispatchTasks(d, now)
   }
+  reconcileGroups(d,items(d),now)
   return d
 }
 export function tickDesk(d: Desk, now: number) {
   let changed = dispatchTasks(d, now)
+  if (d.movements?.length && d.movements[0].at <= now - queueWindowMs) {
+    d.movements = d.movements.filter(move => move.at > now - queueWindowMs)
+    changed = true
+  }
   const stamp = standNow(d, now)
   for (const i of items(d)) {
     if (!active(i) || i.absent) continue
@@ -359,6 +406,11 @@ export function execute(d: Desk, c: Command, now: number) {
     return (d.work[i.key] ??= emptyWork())
   }
   switch (c.type) {
+    case 'groupClaim':
+    case 'groupAdd':
+    case 'groupExclude':
+      editOutageGroup(d,c,items(d),now)
+      break
     case 'wifi': {
       const historic: Incident = {
         key: 'wifi-msk',
@@ -657,7 +709,16 @@ export function execute(d: Desk, c: Command, now: number) {
       if (c.kind === 'availability') {
         ensure(['ready', 'wait', 'unknown'].includes(c.value ?? ''), 'Недопустимая доступность.')
         w.availability = c.value as 'ready' | 'wait' | 'unknown'
-      } else w.recommendation = required(c.text, 'Решение координатора')
+      } else {
+        w.recommendation = required(c.text, 'Решение координатора')
+        if (c.kind === 'accept') w.recommendedTeam = required(c.value, 'Команда решения')
+        else if (c.kind === 'reject') w.recommendedTeam = null
+        else delete w.recommendedTeam
+        w.reports.unshift({
+          id: uid(d), at: now, title: 'Решение о маршрутизации',
+          content: (person ? person.name + ' · ' : '') + w.recommendation, revision: d.version,
+        })
+      }
       break
     }
     case 'threshold': {

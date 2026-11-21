@@ -1,6 +1,8 @@
+import {usesRealBackend} from '../shared/api/mode'
+import {workspaceFetch} from '../auth/session'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import type {Command, Desk, DirectoryUser, Source} from './types'
-import {confirmedIncident, officialFailure, previewIncident, type OfficialCard, type OfficialChanges} from './official'
+import {confirmedIncident, officialFailure, type OfficialCard, type OfficialChanges} from './official'
 import type {Incident} from '../demoData'
 
 interface Reply {
@@ -9,9 +11,14 @@ interface Reply {
   checked: number
   now: number
   error?: string
+  person?: string
+  itsmExternal?: boolean
 }
 function linkedSource(): Source | undefined {
-  const {hash} = window.location
+  const {hash, search} = window.location
+  const params = new URLSearchParams(search)
+  const selected = params.get('dataset')
+  if((!/^#(?:evidence|investigation)\//.test(hash) || !hash.includes('dataset=')) && (selected==='case'||selected==='volume')) return selected
   if (!/^#(?:evidence|investigation)\//.test(hash)) return
   const value = new URLSearchParams(hash.split('?')[1]).get('dataset')
   return value === 'volume' || value === 'case' ? value : undefined
@@ -19,11 +26,12 @@ function linkedSource(): Source | undefined {
 
 export function useDesk() {
   const [mode, setMode] = useState<Source>(() =>
-    linkedSource() ?? (localStorage.getItem('mcc-source') === 'case' ? 'case' : 'volume'),
+    usesRealBackend ? 'case' : linkedSource() ?? (localStorage.getItem('mcc-source') === 'case' ? 'case' : 'volume'),
   )
-  const [person, setPerson] = useState(() => localStorage.getItem('mcc-person') || 'anna')
+  const [person, setPerson] = useState(() => usesRealBackend ? '' : localStorage.getItem('mcc-person') || 'anna')
   const [desk, setDesk] = useState<Desk | null>(null)
   const [now, setNow] = useState(Date.now)
+  const [itsmExternal, setItsmExternal] = useState(false)
   const [checked, setChecked] = useState(0),
     [error, setError] = useState(''),
     [actionError, setActionError] = useState('')
@@ -38,6 +46,8 @@ export function useDesk() {
       current.current.version = reply.version
       setDesk(reply.desk)
     }
+    if (usesRealBackend && reply.person) setPerson(reply.person)
+    if (reply.itsmExternal !== undefined) setItsmExternal(reply.itsmExternal)
     setChecked(reply.checked)
     clockOffset.current = reply.now - Date.now()
     setNow(reply.now)
@@ -47,8 +57,8 @@ export function useDesk() {
     async (signal?: AbortSignal) => {
       const snapshot = current.current
       try {
-        const r = await fetch('/api/stand/snapshot?mode=' + snapshot.mode + '&since=' + snapshot.version, {
-          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
+        const r = await workspaceFetch('/api/stand/snapshot?mode=' + snapshot.mode + '&since=' + snapshot.version, {
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
           cache: 'no-store',
         })
         if (!r.ok) throw Error('HTTP ' + r.status)
@@ -64,7 +74,7 @@ export function useDesk() {
     const controller = new AbortController()
     void refresh(controller.signal)
     const clock = window.setInterval(() => setNow(Date.now() + clockOffset.current), 1000)
-    const timer = window.setInterval(() => void refresh(controller.signal), 2000)
+    const timer = window.setInterval(() => void refresh(controller.signal), usesRealBackend ? 5000 : 2000)
     return () => {
       controller.abort()
       clearInterval(timer)
@@ -76,7 +86,7 @@ export function useDesk() {
     setBusy(true)
     setActionError('')
     try {
-      const r = await fetch('/api/stand/action?mode=' + source, {
+      const r = await workspaceFetch('/api/stand/action?mode=' + source, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(command),
@@ -97,7 +107,7 @@ export function useDesk() {
   const loadUsers = useCallback(async () => {
     setDirectoryError('')
     try {
-      const r = await fetch('/api/dashboard/users', {cache: 'no-store', signal: AbortSignal.timeout(5000)})
+      const r = await workspaceFetch('/api/dashboard/users', {cache: 'no-store', signal: AbortSignal.timeout(5000)})
       if (!r.ok) throw Error('HTTP ' + r.status)
       const list: unknown = await r.json()
       if (!Array.isArray(list) || !list.every((u) => u && typeof (u as DirectoryUser).login === 'string' && typeof (u as DirectoryUser).name === 'string'))
@@ -119,12 +129,7 @@ export function useDesk() {
       return false
     }
   }, [])
-  /**
-   * Официальное изменение инцидента: PATCH /api/dashboard/incidents/{id}.
-   * Изменения предварительно показываются в карточке и группах; при отказе
-   * показ откатывается к последнему подтверждённому состоянию, а введённые
-   * значения остаются в форме для исправления.
-   */
+  // Only show a changed assignment after the API confirms the write.
   async function patchIncident(incident: Incident, changes: OfficialChanges): Promise<{ok: boolean; error?: string; record?: Incident}> {
     const body: Record<string, unknown> = {}
     if (changes.assignedEmployeeLogin !== undefined) body.assignedEmployeeLogin = changes.assignedEmployeeLogin
@@ -132,13 +137,8 @@ export function useDesk() {
     if (changes.stateEnum !== undefined) body.stateEnum = changes.stateEnum
     if (changes.solution !== undefined) body.solution = changes.solution
     if (!Object.keys(body).length) return {ok: false, error: 'Нет изменений для отправки.'}
-    const hadRecord = desk ? Object.hasOwn(desk.records, incident.key) : false
-    const previous = desk?.records[incident.key]
-    setDesk((d) =>
-      d ? {...d, records: {...d.records, [incident.key]: previewIncident(d.records[incident.key] ?? incident, changes)}} : d,
-    )
     try {
-      const r = await fetch('/api/dashboard/incidents/' + encodeURIComponent(incident.id), {
+      const r = await workspaceFetch('/api/dashboard/incidents/' + encodeURIComponent(incident.id), {
         method: 'PATCH',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body),
@@ -146,22 +146,15 @@ export function useDesk() {
       const reply: unknown = await r.json().catch(() => null)
       if (!r.ok) throw Error(officialFailure(r.status, reply))
       const record = confirmedIncident(desk?.records[incident.key] ?? incident, reply as OfficialCard)
-      setDesk((d) => (d ? {...d, records: {...d.records, [incident.key]: record}} : d))
-      void refresh()
+      await refresh()
       return {ok: true, record}
     } catch (e) {
-      setDesk((d) => {
-        if (!d) return d
-        const records = {...d.records}
-        if (hadRecord && previous) records[incident.key] = previous
-        else delete records[incident.key]
-        return {...d, records}
-      })
       void refresh()
       return {ok: false, error: e instanceof Error ? e.message : 'Ошибка сохранения'}
     }
   }
   const selectSource = useCallback((value: Source) => {
+    if (usesRealBackend) return
     localStorage.setItem('mcc-source', value)
     if (value === current.current.mode) return
     current.current = {mode: value, version: -1}
@@ -181,10 +174,16 @@ export function useDesk() {
     return () => window.removeEventListener('hashchange', followLink)
   }, [selectSource])
   function source(value: Source) {
+    const url=new URL(window.location.href)
+    if(url.searchParams.has('dataset')){
+      url.searchParams.set('dataset',value)
+      history.replaceState(history.state,'',url)
+    }
     selectSource(value)
-    location.hash = 'desk/source'
+    location.hash = 'stand'
   }
   function login(value: string) {
+    if (usesRealBackend) return
     localStorage.setItem('mcc-person', value)
     setPerson(value)
   }
@@ -196,6 +195,7 @@ export function useDesk() {
     login,
     now,
     checked,
+    itsmExternal,
     error,
     actionError,
     busy,

@@ -20,6 +20,11 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: mts-dashboard-front
       FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8080' }}
+      BACKEND_URL: ${{ vars.FRONTEND_BACKEND_URL || 'http://backend:8080' }}
+      OIDC_AUTHORITY: ${{ vars.FRONTEND_OIDC_AUTHORITY }}
+      MCC_GROUP_MODEL: ${{ vars.MCC_GROUP_MODEL }}
+      MCC_OLLAMA_URL: ${{ vars.MCC_OLLAMA_URL }}
+      COMPOSE_FILE: compose.yaml:compose.pi.yaml
     defaults:
       run:
         shell: bash
@@ -53,6 +58,7 @@ jobs:
           import os
           import re
           import subprocess
+          from urllib.parse import urlsplit
           from urllib.request import urlopen
 
           origin = "http://127.0.0.1:" + os.environ["FRONTEND_PORT"]
@@ -73,13 +79,19 @@ jobs:
           if not bundle:
               raise SystemExit("Frontend entry bundle missing")
           check_asset(bundle[1], "dist" + bundle[1])
-          desk = json.loads(fetch("/api/stand/snapshot?mode=case"))["desk"]
-          if desk["mode"] != "case" or desk["sourceError"] or not isinstance(desk["records"], dict):
-              raise SystemExit("Incident source unavailable")
-          print(f"Published port {os.environ['FRONTEND_PORT']}: HTML and {bundle[1]} match the running image; API returned {len(desk['records'])} incidents")
+          health = json.loads(fetch("/health"))
+          if health["status"] != "UP":
+              raise SystemExit("Backend health check failed")
+          authority = os.environ["OIDC_AUTHORITY"]
+          discovery = json.loads(fetch(urlsplit(authority).path + "/.well-known/openid-configuration"))
+          if discovery["issuer"] != authority:
+              raise SystemExit("Keycloak issuer does not match FRONTEND_OIDC_AUTHORITY")
+          if fetch("/auth/callback") != html.encode():
+              raise SystemExit("OIDC callback does not serve the frontend")
+          print(f"Published frontend matches the running image and backend reports {health['status']}")
           PY
 
-      - name: Open the published agent form in Chromium
+      - name: Open the published sign-in page in Chromium
         timeout-minutes: 10
         run: |
           docker build --target stand-browser --tag mts-dashboard-front-stand-browser .

@@ -5,16 +5,18 @@ import {createServer} from 'node:http'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {setTimeout as delay} from 'node:timers/promises'
+import {identityFixture} from './support/identity.mjs'
 import {mockService} from '../mock/server.ts'
 
 // Контракт официального изменения инцидентов (KAN-58/KAN-12):
 // GET /api/dashboard/users и PATCH /api/dashboard/incidents/{incidentId}.
 
-test('the official directory and incident patch follow the dashboard contract', async () => {
+test('the official directory and incident patch follow the dashboard contract', async (t) => {
+  const identity = await identityFixture(t)
   const dir = await mkdtemp(join(tmpdir(), 'mcc-official-test-'))
   let api, server, root
   async function start() {
-    api = mockService(dir)
+    api = mockService(dir, undefined, {}, identity.settings)
     server = createServer((q, r) => api.handle(q, r, () => r.end()))
     await new Promise((done) => server.listen(0, '127.0.0.1', done))
     root = 'http://127.0.0.1:' + server.address().port
@@ -23,14 +25,14 @@ test('the official directory and incident patch follow the dashboard contract', 
     await new Promise((done) => server.close(done))
     api.close()
   }
-  const users = async () => (await (await fetch(root + '/api/dashboard/users')).json())
+  const users = async () => (await (await identity.request(root + '/api/dashboard/users')).json())
   const patch = (id, body) =>
-    fetch(root + '/api/dashboard/incidents/' + id, {
+    identity.request(root + '/api/dashboard/incidents/' + id, {
       method: 'PATCH',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify(body),
     })
-  const desk = async () => (await (await fetch(root + '/api/stand/snapshot?mode=volume&since=-1')).json()).desk
+  const desk = async () => (await (await identity.request(root + '/api/stand/snapshot?mode=volume&since=-1')).json()).desk
   const auth = 'INC000021940126'
   try {
     await start()

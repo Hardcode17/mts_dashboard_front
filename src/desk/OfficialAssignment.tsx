@@ -30,11 +30,11 @@ type SaveState =
  * бэкенд дашборда (PATCH /api/dashboard/incidents/{id}); подтверждённое
  * состояние всегда приходит ответом сервера, при отказе показ откатывается.
  */
-export function OfficialAssignment({incident}: {incident: Incident}) {
+export function OfficialAssignment({incident, proposedTeam}: {incident: Incident; proposedTeam?: string}) {
   const {directory, directoryError, loadUsers, patchIncident} = useWorkspace()
   // Пока координатор не выбрал исполнителя сам, поле следует за подтверждённым назначением.
   const [employeeChoice, setEmployeeChoice] = useState<string | null>(null)
-  const [team, setTeam] = useState(incident.team)
+  const [team, setTeam] = useState(proposedTeam || incident.team)
   const [stateEnum, setStateEnum] = useState<ItsmState | ''>(itsmEnumForState(incident.state) ?? '')
   const [solution, setSolution] = useState(incident.solution ?? '')
   const [save, setSave] = useState<SaveState>(null)

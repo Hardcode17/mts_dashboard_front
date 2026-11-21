@@ -1,0 +1,124 @@
+.incident-chronology {
+  min-width: 0;
+  --chronology-columns: minmax(7.5rem, 0.8fr) minmax(8rem, 0.85fr) minmax(0, 3.5fr);
+}
+.chronology-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--g-spacing-3);
+}
+.chronology-head h2,
+.incident-chronology p {
+  margin: 0;
+}
+.chronology-table-head,
+.chronology-row {
+  display: grid;
+  grid-template-columns: var(--chronology-columns);
+  gap: var(--g-spacing-5);
+  text-align: start;
+}
+.chronology-table-head,
+.incident-chronology small {
+  color: var(--g-color-text-secondary);
+}
+.chronology-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.chronology-row {
+  align-items: baseline;
+  border-top: 1px solid var(--g-color-line-generic);
+  padding-block: var(--g-spacing-3);
+  overflow-wrap: anywhere;
+  scroll-margin: 4rem;
+}
+.chronology-row.is-selected {
+  background: var(--g-color-base-info-light);
+  outline: 1px solid var(--g-color-line-generic);
+  outline-offset: -1px;
+}
+.chronology-time,
+.chronology-source {
+  display: grid;
+  gap: var(--g-spacing-half);
+}
+.chronology-time time {
+  font-variant-numeric: tabular-nums;
+}
+.chronology-details,
+.chronology-source,
+.chronology-message {
+  min-width: 0;
+}
+.chronology-details summary,
+.chronology-compare summary {
+  cursor: pointer;
+  color: var(--g-color-text-info);
+}
+.chronology-details summary:focus-visible,
+.chronology-compare summary:focus-visible {
+  outline: 2px solid var(--g-color-line-focus);
+}
+.chronology-values {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: var(--g-spacing-2) 0;
+}
+.chronology-values th,
+.chronology-values td {
+  padding: var(--g-spacing-2);
+  vertical-align: top;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.chronology-values thead th {
+  color: var(--g-color-text-secondary);
+  font-weight: normal;
+}
+.chronology-values th[scope='row'] {
+  font-weight: 500;
+}
+.chronology-values tbody tr {
+  border-top: 1px solid var(--g-color-line-generic);
+}
+.chronology-compare {
+  border-top: 1px solid var(--g-color-line-generic);
+  padding-top: var(--g-spacing-3);
+}
+.chronology-versions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--g-spacing-3);
+  margin-block: var(--g-spacing-3);
+}
+@media (max-width: 48rem) {
+  .chronology-table-head {
+    display: none;
+  }
+  .chronology-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--g-spacing-1) var(--g-spacing-3);
+  }
+  .chronology-time {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--g-spacing-1);
+  }
+  .chronology-time,
+  .chronology-source {
+    font-size: var(--g-text-body-short-font-size);
+  }
+  .chronology-message,
+  .chronology-details {
+    grid-column: 1 / -1;
+  }
+  .chronology-versions {
+    grid-template-columns: 1fr;
+  }
+}

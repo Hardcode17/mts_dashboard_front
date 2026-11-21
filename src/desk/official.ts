@@ -30,19 +30,6 @@ export interface OfficialCard {
   revision?: number
 }
 
-/** Предварительный показ отправленных изменений до подтверждения сервера. */
-export function previewIncident(record: Incident, changes: OfficialChanges): Incident {
-  const next: Incident = {...record}
-  if (changes.assignedGroupName !== undefined) next.team = changes.assignedGroupName
-  if (changes.assignedEmployeeName !== undefined) next.assignee = changes.assignedEmployeeName || undefined
-  if (changes.stateEnum !== undefined) {
-    next.state = itsmStateLabels[changes.stateEnum]
-    next.research = changes.stateEnum === 'Research'
-  }
-  if (changes.solution !== undefined) next.solution = changes.solution || undefined
-  return next
-}
-
 /** Сведение карточки к подтверждённому ответу сервера. */
 export function confirmedIncident(record: Incident, card: OfficialCard): Incident {
   const next: Incident = {...record}

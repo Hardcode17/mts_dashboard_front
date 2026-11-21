@@ -1,6 +1,16 @@
 import type {CardRevision} from './incidentHistory.ts'
+import type {IncidentGroup} from './entities/incident/model/api-types.ts'
+import {usesRealBackend} from './shared/api/mode.ts'
 
 export interface Incident {
+  sysId?: string
+  assigneeLogin?: string
+  meetingUrl?: string | null
+  itsmUrl?: string | null
+  itsmDemo?: boolean
+  parentId?: string | null
+  upstreamService?: string
+  errorCode?: string
   key: string
   id: string
   title: string
@@ -29,6 +39,7 @@ export interface Incident {
   registeredAt?: number
   updatedAt?: number
   absent?: boolean
+  groups?: IncidentGroup[]
 }
 
 export interface ShiftEvent {
@@ -165,7 +176,7 @@ function makeShiftSnapshot() {
   return {incidents, events, history}
 }
 
-const shift = makeShiftSnapshot()
+const shift = usesRealBackend ? {incidents: [], events: [], history: new Map()} : makeShiftSnapshot()
 export const initialIncidents = shift.incidents
 export const initialEvents = shift.events
 export const incidentRevisions: ReadonlyMap<string, readonly CardRevision[]> = shift.history

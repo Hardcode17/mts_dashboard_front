@@ -3,60 +3,40 @@ import {DatabaseSync} from 'node:sqlite'
 import {mkdirSync, readFileSync, statSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {IncomingMessage, ServerResponse} from 'node:http'
+import {groupModelWorker} from './groupModel.ts'
+import {livePublication} from './livePublication.ts'
+import {localOfficial} from './localOfficial.ts'
+import {handleFixtureRelationships} from './relationships.ts'
+import {pendingGroupReviews, applyGroupReview, reconcileGroups} from './incidentGroups.ts'
+import {sampleMonitorHistory} from './monitorHistory.ts'
 import {shopStand} from './shop.ts'
-import {applySnapshot, createDesk, execute, items, tickDesk} from './engine.ts'
-import {directoryLogin, userDirectory} from './directory.ts'
-import type {Incident} from '../src/demoData.ts'
-import {itsmEnumForState, itsmStateLabels, type Command, type Desk, type DirectoryUser, type ItsmState, type Source} from '../src/desk/types.ts'
+import {applyCard, applySnapshot, createDesk, dispatchTasks, execute, items, lookup, tickDesk} from './engine.ts'
+import {itsmGateway, ItsmError, mergeConfirmation} from './itsm.ts'
+import {requireWorkspaceUser, workspaceAuthSettings} from './workspaceAuth.ts'
+import {coordinatorGroup, type Desk, type Command, type Source} from '../src/desk/types.ts'
 
-/** Отказ маршрута /api/dashboard в формате AppErrorResponse бэкенда (KAN-58). */
-class Rejection extends Error {
-  readonly status: number
-  readonly code: string
-  readonly extra: Record<string, unknown>
-  constructor(status: number, code: string, message: string, extra: Record<string, unknown> = {}) {
-    super(message)
-    this.status = status
-    this.code = code
-    this.extra = extra
-  }
-}
+const liveCommands = new Set<Command['type']>([
+  'ack', 'available', 'accept', 'handoff', 'link', 'unlink', 'note', 'toggleNote', 'threshold',
+  'report', 'preset', 'removePreset', 'analyze', 'advisor', 'groupClaim', 'groupAdd', 'groupExclude',
+])
 
-const patchKeys = ['assignedEmployeeLogin', 'assignedEmployee', 'stateEnum', 'assignedGroupName', 'solution'] as const
-
-function officialCard(d: Desk, i: Incident, users: DirectoryUser[]) {
-  return {
-    id: i.id,
-    header: i.title,
-    description: i.description ?? '',
-    productName: i.product,
-    service: i.service ?? '',
-    serviceType: i.serviceType ?? '',
-    assignedGroupName: i.team,
-    assignedEmployee: i.assignee ?? null,
-    assignedEmployeeLogin: directoryLogin(users, i.assignee) ?? null,
-    stateEnum: itsmEnumForState(i.state) ?? null,
-    state: i.state,
-    priorityId: i.priority,
-    submitDate: i.registeredAt ? new Date(i.registeredAt).toISOString() : null,
-    lastAssignmentToTeamDateTime: i.assignedEpoch ? new Date(i.assignedEpoch).toISOString() : null,
-    deadline: i.dueAt != null ? new Date(i.dueAt).toISOString() : null,
-    completionDate: i.restoredEpoch ? new Date(i.restoredEpoch).toISOString() : null,
-    solution: i.solution ?? '',
-    updatedAt: i.updatedAt ? new Date(i.updatedAt).toISOString() : null,
-    itsmUrl: null,
-    itsmDemo: true,
-    eventSeq: d.seq,
-    revision: d.version,
-  }
+export function liveWorkspaceService(backend: string, directory = process.env.MCC_STATE_DIR || resolve('.mcc-workspace')) {
+  const origin = new URL(backend).origin
+  return mockService(directory, '', {dashboard: origin}, {
+    ...workspaceAuthSettings(), profileUrl: origin + '/api/me',
+  }, origin)
 }
 
 export function mockService(
   directory = process.env.MCC_STATE_DIR || resolve('.mcc-stand'),
   file = process.env.MCC_SOURCE_FILE || resolve('mock/fixtures/incidents.json'),
+  external: Parameters<typeof itsmGateway>[0] = {itsm: process.env.MCC_ITSM_URL, dashboard: process.env.MCC_DASHBOARD_URL},
+  auth = workspaceAuthSettings(),
+  liveBackend?: string,
 ) {
+  const gateway = itsmGateway(external)
   mkdirSync(directory, {recursive: true})
-  const db = new DatabaseSync(join(directory, 'workspace.sqlite'))
+  const db = new DatabaseSync(join(directory, liveBackend ? 'workspace-live.sqlite' : 'workspace.sqlite'))
   db.exec(
     'PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS workspace (mode TEXT PRIMARY KEY, body TEXT NOT NULL)',
   )
@@ -75,15 +55,17 @@ export function mockService(
   )
   let seenFile = '',
     lastChecked = 0
-  function save(d: Desk, writeCards = true) {
+  function save(d: Desk, writeCards: boolean | string[] = true) {
     const {records, revisions, ...meta} = d
     const version = d.version + 1
     db.exec('BEGIN IMMEDIATE')
     try {
       if (writeCards) {
-        for (const [key, row] of Object.entries(records)) cardWrite.run(d.mode, key, JSON.stringify(row))
-        for (const [key, history] of Object.entries(revisions))
-          revisionWrite.run(d.mode, key, JSON.stringify(history))
+        for (const key of Array.isArray(writeCards) ? writeCards : Object.keys(records))
+          cardWrite.run(d.mode, key, JSON.stringify(records[key]))
+        for (const key of Array.isArray(writeCards) ? writeCards : Object.keys(revisions)) {
+          if (revisions[key]) revisionWrite.run(d.mode, key, JSON.stringify(revisions[key]))
+        }
       }
       write.run(d.mode, JSON.stringify({...meta, version}))
       db.exec('COMMIT')
@@ -94,9 +76,15 @@ export function mockService(
     d.version = version
     desks.set(d.mode, d)
   }
-  for (const mode of ['case', 'volume'] as const) {
+  const modes: Source[] = liveBackend ? ['case'] : ['case', 'volume']
+  for (const mode of modes) {
     const row = db.prepare('SELECT body FROM workspace WHERE mode=?').get(mode)
     const d: Desk = row ? JSON.parse(String(row.body)) : createDesk(mode, Date.now())
+    if (liveBackend && !row) {
+      d.people = []
+      d.enabled = []
+      d.apiBeforeFirstSuccess = true
+    }
     const readRows = (table: 'incident' | 'revisions') =>
       Object.fromEntries(
         db
@@ -107,10 +95,18 @@ export function mockService(
     const legacy = row && d.records !== undefined
     d.records ??= readRows('incident')
     d.revisions ??= readRows('revisions')
+    const withoutGroups = !d.outageGroups
+    if (withoutGroups) reconcileGroups(d,items(d),Date.now())
     desks.set(mode, d)
-    if (!row || legacy) save(d)
+    if (!row || legacy || withoutGroups) save(d)
   }
+  const live = liveBackend && gateway
+    ? livePublication(liveBackend, gateway, () => desks.get('case')!, save)
+    : null
+  const official = localOfficial(desks, save)
+  const prefix = live ? '/api/workspace/' : '/api/stand/'
   function pollFile() {
+    if (live) return
     const d = desks.get('case')!
     if (d.input !== 'file') return
     const now = Date.now()
@@ -142,127 +138,107 @@ export function mockService(
       }
     }
   }
-  const shop = shopStand()
+  const shop = live ? null : shopStand()
   pollFile()
+  const groupReviewer = groupModelWorker(
+    mode => desks.has(mode) ? pendingGroupReviews(desks.get(mode)!) : [],
+    (mode, candidate, verdict) => {
+      const next = structuredClone(desks.get(mode)!)
+      if (applyGroupReview(next, candidate, verdict, Date.now(), items(next))) save(next, false)
+    },
+  )
   const timer = setInterval(() => {
     const now = Date.now()
     pollFile()
-    for (const d of desks.values()) if (tickDesk(d, now)) save(d, false)
+    for (const d of desks.values()) {
+      const ticked = tickDesk(d, now)
+      if (sampleMonitorHistory(d, () => items(d), now) || ticked) save(d, false)
+    }
+    void groupReviewer.check()
   }, 1000)
   timer.unref()
   const send = (res: ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'})
     res.end(JSON.stringify(body))
   }
-  /** PATCH /api/dashboard/incidents/{id} — официальный контракт KAN-58 поверх мок-стенда. */
-  async function patchOfficialCard(incidentId: string, body: unknown) {
-    if (!/^INC[\d-]*$/i.test(incidentId))
-      throw new Rejection(400, 'INVALID_INCIDENT_ID', 'incidentId должен быть номером вида INC000021095531')
-    const changes = (body ?? {}) as Record<string, unknown>
-    const keys = Object.keys(changes)
-    if (!keys.length || !keys.every((key) => (patchKeys as readonly string[]).includes(key)))
-      throw new Rejection(400, 'INCIDENT_PATCH_INVALID', 'Изменение должно содержать только поля контракта')
-    for (const [key, value] of Object.entries(changes)) {
-      if (value === null && (key === 'assignedEmployeeLogin' || key === 'assignedEmployee')) continue
-      if (typeof value !== 'string' || !value.trim())
-        throw new Rejection(400, 'INCIDENT_PATCH_INVALID', 'Проверьте поле «' + key + '»')
-      const limit = key === 'assignedEmployeeLogin' ? 128 : key === 'assignedGroupName' || key === 'assignedEmployee' ? 300 : Infinity
-      if ([...value].length > limit)
-        throw new Rejection(400, 'INCIDENT_PATCH_INVALID', 'Поле «' + key + '» длиннее допустимого лимита')
-    }
-    const stateEnum = changes.stateEnum as ItsmState | undefined
-    if (stateEnum !== undefined && !(stateEnum in itsmStateLabels))
-      throw new Rejection(400, 'INCIDENT_PATCH_INVALID', 'Неизвестный статус: ' + String(stateEnum))
-    if (changes.solution !== undefined && !['Resolved', 'Closed', 'Research'].includes(String(stateEnum)))
-      throw new Rejection(400, 'INCIDENT_PATCH_INVALID', 'Текст решения передаётся только с завершающим статусом')
-    const users = userDirectory(desks)
-    if (typeof changes.assignedEmployeeLogin === 'string' && !users.some((u) => u.login === changes.assignedEmployeeLogin))
-      throw new Rejection(400, 'ITSM_USER_NOT_FOUND', 'Исполнителя ' + changes.assignedEmployeeLogin + ' нет в справочнике')
-    const targets: {d: Desk; key: string; before: Incident | undefined}[] = []
-    for (const d of desks.values()) {
-      const found = items(d).find((i) => i.id === incidentId)
-      if (found) targets.push({d, key: found.key, before: d.records[found.key]})
-    }
-    if (!targets.length) {
-      const d = desks.get('case')!
-      throw new Rejection(404, 'INCIDENT_NOT_FOUND', 'Инцидент ' + incidentId + ' не найден', {
-        eventSeq: d.seq,
-        revision: d.version,
-      })
-    }
-    const current = targets[0].d.records[targets[0].key] ?? items(targets[0].d).find((i) => i.id === incidentId)!
-    const nextLabel = stateEnum === undefined ? undefined : itsmStateLabels[stateEnum]
-    if (current.state === 'Закрыт' && nextLabel !== undefined && nextLabel !== 'Закрыт')
-      throw new Rejection(409, 'INCIDENT_CONFLICT', 'Закрытый инцидент нельзя перевести в другой статус')
-    const data: Record<string, unknown> = {}
-    if (typeof changes.assignedGroupName === 'string') data.team = changes.assignedGroupName.trim()
-    if (changes.assignedEmployeeLogin !== undefined)
-      data.assignee = users.find((u) => u.login === changes.assignedEmployeeLogin)?.name ?? ''
-    if (nextLabel !== undefined) {
-      data.state = nextLabel
-      if (typeof changes.solution === 'string') data.solution = changes.solution
-      else if (stateEnum === 'Assigned' || stateEnum === 'WorkInProgress') {
-        if (current.solution) data.solution = '' // активные статусы очищают решение (контракт KAN-57)
-      } else if (!current.solution) data.solution = 'Восстановление подтверждено на стенде.'
-    } else if (typeof changes.assignedEmployee === 'string') data.assignee = changes.assignedEmployee
-    const now = Date.now()
-    let response: {d: Desk; incident: Incident} | undefined
-    for (const target of targets) {
-      const before = target.d.records[target.key]
-      const d = structuredClone(target.d)
-      execute(d, {type: 'edit', key: target.key, data}, now)
-      const incident = d.records[target.key]!
-      // Повторная публикация того же состояния не меняет карточку и не плодит историю.
-      if (JSON.stringify(incident) === JSON.stringify(before ?? current)) continue
-      save(d, true)
-      response ??= {d, incident}
-    }
-    return officialCard(response?.d ?? targets[0].d, response?.incident ?? current, users)
-  }
   async function handle(req: IncomingMessage, res: ServerResponse, next: () => void) {
     const url = new URL(req.url ?? '/', 'http://stand.local')
-    if (url.pathname === '/api/dashboard/users' && req.method === 'GET')
-      return send(res, 200, userDirectory(desks))
-    const official = req.method === 'PATCH' ? /^\/api\/dashboard\/incidents\/([^/]+)$/.exec(url.pathname) : null
-    if (official) {
-      try {
-        if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
-          return send(res, 403, {code: 'FORBIDDEN_ORIGIN', message: 'Источник запроса не совпадает'})
-        if (!req.headers['content-type']?.startsWith('application/json'))
-          return send(res, 415, {code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Нужен application/json'})
-        const parts: Buffer[] = []
-        let bytes = 0
-        for await (const chunk of req) {
-          bytes += chunk.length
-          if (bytes > 1024 * 1024) return send(res, 413, {code: 'REQUEST_BODY_TOO_LARGE', message: 'Тело больше 1 МБ'})
-          parts.push(Buffer.from(chunk))
-        }
-        const card = await patchOfficialCard(decodeURIComponent(official[1]), JSON.parse(Buffer.concat(parts).toString('utf8')))
-        return send(res, 200, card)
-      } catch (e) {
-        if (e instanceof Rejection)
-          return send(res, e.status, {code: e.code, message: e.message, ...e.extra})
-        const message = e instanceof Error ? e.message : 'Ошибка запроса'
-        return send(res, /окончателен|изменилась/.test(message) ? 409 : 400, {code: 'INCIDENT_PATCH_INVALID', message})
-      }
+    if (!live && req.method === 'GET' && url.pathname === '/auth/config') {
+      return send(res, 200, {url: auth.url, realm: auth.realm, clientId: auth.clientId})
     }
-    if (!url.pathname.startsWith('/api/stand/')) return next()
-    const mode = url.searchParams.get('mode') ?? 'volume'
-    if (mode !== 'case' && mode !== 'volume') return send(res, 400, {error: 'Неизвестный источник'})
+    if (url.pathname !== '/api' && !url.pathname.startsWith('/api/')) return next()
+    const profile = await requireWorkspaceUser(req, res, auth.profileUrl)
+    if (!profile) return
+    if (!live && !gateway && await official(req, res, url)) return
+    if (!live && handleFixtureRelationships(req, res, desks, lastChecked)) return
+    if (!url.pathname.startsWith(prefix)) return send(res, 404, {error: 'Неизвестный маршрут API.'})
+    const mode = url.searchParams.get('mode') ?? (live ? 'case' : 'volume')
+    if ((mode !== 'case' && mode !== 'volume') || !desks.has(mode)) return send(res, 400, {error: 'Неизвестный источник'})
+    const operation = url.pathname.slice(prefix.length)
     const current = () => desks.get(mode)!
     try {
-      if (req.method === 'GET' && url.pathname === '/api/stand/snapshot') {
+      if (live) {
+        if (!['snapshot', 'action', 'itsm'].includes(operation)) return send(res, 404, {error: 'Неизвестный маршрут API.'})
+        await live.refresh(req.headers)
+        const desk = current()
+        if (desk.apiBeforeFirstSuccess && operation !== 'snapshot')
+          return send(res, 503, {error: 'Ожидаем первую публикацию Spring.'})
+        const person = desk.people.find(p => p.id === profile.id)
+        if (!person || person.name !== profile.name) {
+          const next = structuredClone(desk)
+          if (person) next.people.find(p => p.id === profile.id)!.name = profile.name
+          else next.people.push({id: profile.id, name: profile.name, group: coordinatorGroup, available: true, generation: 1})
+          dispatchTasks(next, Date.now())
+          save(next, false)
+        }
+      }
+      const itsmPath = operation === 'itsm'
+      function knownCard(key: unknown) {
+        const card = typeof key === 'string' ? lookup(current(),key) : undefined
+        if (!card || (live && card.absent)) throw new ItsmError(404,'Карточка не найдена в рабочем месте.')
+        return card
+      }
+      async function externalEdit(key: unknown, changes: unknown, expected: unknown, handoff?: Command) {
+        if (!gateway) throw new ItsmError(503,'Внешняя ITSM не подключена.')
+        const item = knownCard(key)
+        return gateway.serial(item.id,async()=>{
+          const before=knownCard(key)
+          if (typeof expected !== 'number' || expected !== (before.updatedAt ?? 0))
+            throw new ItsmError(409,'Карточка уже изменилась. Перечитайте данные перед сохранением.')
+          if (handoff) execute(structuredClone(current()),handoff,Date.now())
+          const card=await gateway.patch(before,changes,req.headers)
+          live?.invalidate()
+          // An unrelated poll or another INC may have changed while ITSM was answering.
+          const d=structuredClone(current()), previous=lookup(d,item.key)!
+          const confirmed=mergeConfirmation(before,previous,card,changes)
+          const now=Date.now()
+          applyCard(d,confirmed,now)
+          dispatchTasks(d,now)
+          save(d)
+          return {id:item.id,team:confirmed.team,assignee:confirmed.assignee??null,state:confirmed.state}
+        })
+      }
+      if (req.method === 'GET' && itsmPath) {
+        if (!gateway) return send(res,200,{external:false})
+        const item = knownCard(url.searchParams.get('key'))
+        return send(res,200,{...await gateway.editor(item,req.headers),expected:item.updatedAt??0})
+      }
+      if (req.method === 'GET' && operation === 'snapshot') {
         const d = current()
         return send(res, 200, {
           version: d.version,
-          checked: mode === 'case' && d.input === 'file' ? lastChecked : Date.now(),
+          itsmExternal: Boolean(gateway),
+          ...(live && {person: profile.id}),
+          checked: live ? live.checked : mode === 'case' && d.input === 'file' ? lastChecked : Date.now(),
           now: Date.now(),
-          desk: url.searchParams.get('since') === String(d.version) ? null : d,
+          desk: url.searchParams.get('since') === String(d.version) ? null : live && d.apiBeforeFirstSuccess
+            ? {...createDesk('case', d.started), version: d.version, people: d.people, enabled: [], apiBeforeFirstSuccess: true, sourceError: d.sourceError}
+            : d,
         })
       }
       if (
-        req.method === 'POST' &&
-        (url.pathname === '/api/stand/action' || url.pathname === '/api/stand/shop')
+        (req.method === 'POST' && (operation === 'action' || operation === 'shop')) ||
+        (req.method === 'PATCH' && itsmPath)
       ) {
         if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
           return send(res, 403, {error: 'Источник запроса не совпадает'})
@@ -276,8 +252,9 @@ export function mockService(
           parts.push(Buffer.from(chunk))
         }
         const body = JSON.parse(Buffer.concat(parts).toString('utf8'))
-        if (url.pathname === '/api/stand/shop') {
-          if (mode !== 'volume') throw Error('Демомагазин работает на наборе большой смены.')
+        if (itsmPath) return send(res,200,await externalEdit(url.searchParams.get('key'),body?.changes,body?.expected))
+        if (operation === 'shop') {
+          if (!shop || mode !== 'volume') throw Error('Демомагазин работает на наборе большой смены.')
           if (body.type === 'start') {
             const w = current().work.incident
             if (w?.telemetryOffline) throw Error('Нет свежих измерений.')
@@ -298,36 +275,45 @@ export function mockService(
           }
           throw Error('Неизвестная операция магазина.')
         }
-        const cmd = body as Command
-        if (!cmd || typeof cmd.type !== 'string') throw Error('Нет действия')
+        if (!body || typeof body !== 'object' || typeof body.type !== 'string') throw Error('Нет действия')
+        if (live && !liveCommands.has(body.type)) return send(res, 400, {error: 'Действие недоступно для рабочего источника.'})
+        const cmd: Command = live ? {...body, person: profile.id} : body
         const now = Date.now()
         if ((cmd.type === 'upload' || cmd.type === 'watchFile') && mode !== 'case')
           throw Error('Выберите источник «Кейс МТС».')
-        const d = structuredClone(current())
-        execute(d, cmd, now)
-        if (cmd.type === 'watchFile') delete d.fileDigest
-        save(d, ['edit', 'upload', 'handoff', 'wifi', 'demo'].includes(cmd.type))
+        if (gateway && cmd.type === 'edit') throw new ItsmError(400,'Сохраните изменение через форму «Изменить в ITSM».')
+        if (gateway && cmd.type === 'handoff') {
+          await externalEdit(cmd.key,{assignedGroupName:cmd.value},cmd.expected,cmd)
+        } else {
+          const d = structuredClone(current())
+          execute(d, cmd, now)
+          if (cmd.type === 'watchFile') delete d.fileDigest
+          save(d, ['edit', 'upload', 'handoff', 'wifi', 'demo'].includes(cmd.type))
+        }
         if (cmd.type === 'watchFile') {
           seenFile = ''
           pollFile()
         }
         return send(res, 200, {
           desk: current(),
+          ...(live && {person: profile.id}),
           version: current().version,
           now,
-          checked: mode === 'case' && current().input === 'file' ? lastChecked : now,
+          checked: live ? live.checked : mode === 'case' && current().input === 'file' ? lastChecked : now,
         })
       }
       send(res, 404, {error: 'Метод стенда не найден'})
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Ошибка запроса'
-      send(res, /устарело|изменилась|другому дежурному/.test(message) ? 409 : 400, {error: message})
+      send(res, e instanceof ItsmError ? e.status : /устарело|изменилась|другому дежурному/.test(message) ? 409 : 400, {error: message})
     }
   }
   return {
     handle,
     close() {
       clearInterval(timer)
+      live?.close()
+      groupReviewer.close()
       db.close()
     },
   }

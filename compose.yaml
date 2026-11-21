@@ -2,13 +2,20 @@ services:
   frontend:
     build:
       context: .
+      args:
+        VITE_OIDC_AUTHORITY: ${OIDC_AUTHORITY:?Set the public Keycloak realm URL}
       labels:
         org.opencontainers.image.revision: "${GITHUB_SHA:-local}"
     ports:
       - "${FRONTEND_PORT:-8080}:3000"
-    restart: unless-stopped
+    environment:
+      BACKEND_URL: ${BACKEND_URL:?Set the backend origin accessible from the container}
+      MCC_STATE_DIR: /var/lib/mcc
+      MCC_GROUP_MODEL: ${MCC_GROUP_MODEL:-}
+      MCC_OLLAMA_URL: ${MCC_OLLAMA_URL:-http://127.0.0.1:11434}
     volumes:
-      - mcc-stand:/app/.mcc-stand
-      - ./mock/fixtures:/app/mock/fixtures:ro
+      - workspace-data:/var/lib/mcc
+    restart: unless-stopped
+
 volumes:
-  mcc-stand:
+  workspace-data:

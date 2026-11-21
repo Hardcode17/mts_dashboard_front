@@ -1,3 +1,4 @@
+import {enterWorkspace} from './support/browser-login.mjs'
 import assert from 'node:assert/strict'
 import {chromium} from 'playwright-core'
 
@@ -26,16 +27,23 @@ export async function checkExpandedAgentForm(form, width) {
 }
 
 if (import.meta.main) {
-  const origin = 'http://127.0.0.1:' + process.env.FRONTEND_PORT
+  const origin = process.env.MCC_PUBLIC_ORIGIN || 'http://127.0.0.1:' + process.env.FRONTEND_PORT
+  const login = {username:process.env.MCC_SMOKE_USERNAME, password:process.env.MCC_SMOKE_PASSWORD, provider:process.env.MCC_KEYCLOAK_URL}
   const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH})
   try {
     for (const [key, width, theme] of [['incident', 1440, 'light'], ['access', 320, 'dark']]) {
       const page = await browser.newPage({viewport: {width, height: 900}, reducedMotion: 'reduce'})
-      const url = origin + '/#investigation/' + key + '?dataset=volume'
-      await page.goto(url)
-      await page.getByRole('heading', {name: 'Разбор причины агентом', exact: true}).waitFor()
+      const url = origin + '/?dataset=volume#stand/agent/' + key
+      const bearer=await enterWorkspace(page,url,login)
+      if (!bearer) {
+        const result=await page.request.get(origin+'/api/stand/snapshot?mode=case')
+        assert.equal(result.status(),401)
+        console.log('Keycloak login required and anonymous API rejected. Protected form requires a test account.')
+        await page.close()
+        break
+      }
+      await page.getByRole('heading', {name: 'Условия разбора ИИ', exact: true}).waitFor()
       await page.locator('input[value="' + theme + '"]').check()
-      await page.locator('summary').filter({hasText: 'Источники и проверки стенда'}).click()
       const form = page.locator('.agent-diagnostics form')
       await form.getByRole('heading', {name: 'Свежесть данных'}).waitFor()
       await form.getByRole('heading', {name: 'Состояние стенда'}).waitFor()
