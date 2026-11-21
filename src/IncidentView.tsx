@@ -8,6 +8,7 @@ import {InvestigationAction} from './InvestigationAction'
 import {cardCoordination, groupHref} from './control-room/attention'
 import {Collaboration} from './desk/CardWork'
 import {IncidentDeadline} from './desk/IncidentDeadline'
+import {IncidentDeadlineRisk} from './desk/IncidentDeadlineRisk'
 import {itsmLink} from './desk/itsmLink'
 import {usesRealBackend} from './shared/api/mode'
 import {useOfficialIncident} from './features/incidents/model/useOfficialIncident'
@@ -56,6 +57,7 @@ function Assignment({
   return (
     <Card className="incident-brief ops-assignment" view="outlined" aria-label="Назначение и срок">
       <IncidentDeadline incident={incident} />
+      <IncidentDeadlineRisk incident={incident} />
       <dl className="incident-brief-facts">
         <div>
           <dt>Координатор смены</dt>

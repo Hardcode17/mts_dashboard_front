@@ -1,5 +1,5 @@
 import type {CardRevision} from './incidentHistory.ts'
-import type {IncidentGroup} from './entities/incident/model/api-types.ts'
+import type {DeadlineRisk, IncidentGroup} from './entities/incident/model/api-types.ts'
 import {usesRealBackend} from './shared/api/mode.ts'
 
 export interface Incident {
@@ -40,6 +40,7 @@ export interface Incident {
   updatedAt?: number
   absent?: boolean
   groups?: IncidentGroup[]
+  deadlineRisk?: DeadlineRisk
 }
 
 export interface ShiftEvent {
@@ -54,11 +55,29 @@ export interface ShiftEvent {
 export const snapshotTime = '12:42'
 
 const sampleIncidents: Incident[] = [
-  {key: 'auth', id: 'INC000021940126', product: 'МТС ID', title: 'Недоступна авторизация клиентов', registered: '12:22', due: '13:02', priority: 4, team: 'Команда авторизации', state: 'Назначен', research: false},
+  {key: 'auth', id: 'INC000021940126', product: 'МТС ID', title: 'Недоступна авторизация клиентов', registered: '12:22', due: '13:02', priority: 4, team: 'Команда авторизации', state: 'Назначен', research: false, deadlineRisk: {
+    risk: 'high', evaluatedAt: '2026-11-21T09:42:00Z', score: 0.83, reasons: [
+      {code: 'group_median_exceeds', text: 'Медиана группы решения 2.1 ч, до дедлайна 0.3 ч'},
+      {code: 'deadline_extended', text: 'Дедлайн уже продлевался 1 раз'},
+    ],
+  }},
   {key: 'video', id: 'INC000021940127', product: 'KION', title: 'Прерывается просмотр трансляций', registered: '12:41', due: '13:08', priority: 4, team: 'Поддержка видео', state: 'Назначен', research: false},
-  {key: 'incident', id: 'INC000021940112', product: 'МТС Маркет', title: 'Задержка подтверждения оплаты', registered: '12:19', due: '13:10', priority: 4, team: 'Координаторы МИ', state: 'В работе', research: false, assignedAt: '12:31', assignee: 'Анна Котова'},
-  {key: 'access', id: 'INC000021940087', product: 'МТС ID', title: 'Ошибка входа в профиль', registered: '12:15', due: '13:35', priority: 2, team: 'Координаторы МИ', state: 'Назначен', research: false, assignedAt: '12:18'},
-  {key: 'kion', id: 'INC000021940098', product: 'KION', title: 'Долгий запуск трансляции', registered: '12:17', due: '13:20', priority: 3, team: 'Поддержка видео', state: 'В работе', research: false},
+  {key: 'incident', id: 'INC000021940112', product: 'МТС Маркет', title: 'Задержка подтверждения оплаты', registered: '12:19', due: '13:10', priority: 4, team: 'Координаторы МИ', state: 'В работе', research: false, assignedAt: '12:31', assignee: 'Анна Котова', deadlineRisk: {
+    risk: 'medium', evaluatedAt: '2026-11-21T09:42:00Z', score: 0.54, reasons: [
+      {code: 'assignee_load', text: 'У исполнителя 5 открытых карточек'},
+      {code: 'group_median_exceeds', text: 'Медиана группы решения 1.2 ч, до дедлайна 0.6 ч'},
+    ],
+  }},
+  {key: 'access', id: 'INC000021940087', product: 'МТС ID', title: 'Ошибка входа в профиль', registered: '12:15', due: '13:35', priority: 2, team: 'Координаторы МИ', state: 'Назначен', research: false, assignedAt: '12:18', deadlineRisk: {
+    risk: 'low', evaluatedAt: '2026-11-21T09:42:00Z', score: 0.12, reasons: [
+      {code: 'group_median_exceeds', text: 'Медиана группы решения 0.5 ч, до дедлайна 1.9 ч'},
+    ],
+  }},
+  {key: 'kion', id: 'INC000021940098', product: 'KION', title: 'Долгий запуск трансляции', registered: '12:17', due: '13:20', priority: 3, team: 'Поддержка видео', state: 'В работе', research: false, deadlineRisk: {
+    risk: 'unknown', evaluatedAt: '2026-11-21T09:42:00Z', reasons: [
+      {code: 'no_group_data', text: 'Нет данных о скорости группы решения'},
+    ],
+  }},
   {key: 'premium', id: 'INC000021940083', product: 'МТС Premium', title: 'Задержка активации подписки', registered: '12:12', due: '14:00', priority: 3, team: 'Поддержка подписок', state: 'В работе', research: false},
   {key: 'delivery', id: 'INC000021939981', product: 'МТС Линк', title: 'Повторная доставка уведомлений', registered: '11:10', due: null, priority: 3, team: 'Команда уведомлений', state: 'Исследование ситуации', research: true, restoredAt: '11:54', solution: 'Повторная доставка уведомлений устранена.'},
   {key: 'balance', id: 'INC000021939947', product: 'МТС Cashback', title: 'Расхождение баланса кешбэка', registered: '10:54', due: null, priority: 2, team: 'Поддержка лояльности', state: 'Исследование ситуации', research: true, restoredAt: '11:28'},

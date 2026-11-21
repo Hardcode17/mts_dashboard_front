@@ -213,6 +213,7 @@ export function handleFixtureRelationships(
       assignedEmployee: item.assignee ?? null,
       remainingSeconds: due == null ? null : Math.floor((due - now) / 1000),
       overdue: due != null && now > due,
+      deadlineRisk: item.deadlineRisk ?? null,
       itsmUrl: new URL('/#itsm/' + encodeURIComponent(item.key), 'http://' + req.headers.host).href,
       itsmDemo: true,
     })

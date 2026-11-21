@@ -20,6 +20,27 @@ export type DeadlineState =
   | 'unspecified'
   | 'inactive'
 
+/** Категория риска нарушения срока решения (KAN-83, контракт docs/deadline-risk.html в mts_dashboard_data). */
+export type DeadlineRiskLevel = 'low' | 'medium' | 'high' | 'unknown'
+/** Основание оценки: код признака и человекочитаемый текст с числами. */
+export interface DeadlineRiskReason {
+  code: string
+  text: string
+}
+/**
+ * Оценка риска просрочки, приходит в составе карточки инцидента.
+ * По контракту поле опционально: без дедлайна оценка не считается.
+ * evaluatedAt — ISO-строка в UTC; типизирована как опциональная,
+ * чтобы карточка не ломалась при частичном ответе.
+ * score отдаётся только для отладки и в интерфейсе не показывается.
+ */
+export interface DeadlineRisk {
+  risk: DeadlineRiskLevel
+  evaluatedAt?: string
+  reasons: DeadlineRiskReason[]
+  score?: number
+}
+
 export interface IncidentDto {
   id: IncidentNumber
   header: string
@@ -40,6 +61,7 @@ export interface IncidentDto {
   remainingSeconds: number | null
   overdue: boolean
   groups: IncidentGroup[]
+  deadlineRisk?: DeadlineRisk | null
 }
 
 /**

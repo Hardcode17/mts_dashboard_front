@@ -1,4 +1,4 @@
-import type {IncidentNumber, IncidentState} from './api-types.ts'
+import type {DeadlineRisk, IncidentNumber, IncidentState} from './api-types.ts'
 
 export type DashboardGroup = 'critical' | 'coordinator' | 'high' | 'research'
 
@@ -28,6 +28,8 @@ export interface DashboardIncidentCard extends DashboardIncidentSummary {
   itsmDemo: boolean
   revision: number
   eventSeq: number
+  /** Оценка риска нарушения срока (KAN-83); отсутствует, если бэкенд её не посчитал. */
+  deadlineRisk?: DeadlineRisk | null
 }
 
 export interface DashboardIncidentPage {
