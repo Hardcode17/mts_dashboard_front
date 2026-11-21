@@ -110,15 +110,16 @@ export function useDesk() {
       const r = await workspaceFetch('/api/dashboard/users', {cache: 'no-store', signal: AbortSignal.timeout(5000)})
       if (!r.ok) throw Error('HTTP ' + r.status)
       const list: unknown = await r.json()
-      if (!Array.isArray(list) || !list.every((u) => u && typeof (u as DirectoryUser).login === 'string' && typeof (u as DirectoryUser).name === 'string'))
+      if (!Array.isArray(list) || !list.every((u) => u && typeof u.login === 'string' &&
+        (typeof u.displayName === 'string' || typeof u.name === 'string')))
         throw Error('Справочник получен в неожиданном формате.')
       setDirectory(
         list.map((u, index) => {
-          const user = u as Partial<DirectoryUser>
+          const user = u as DirectoryUser & {displayName?: string}
           return {
             sysId: typeof user.sysId === 'string' ? user.sysId : 'user-' + index,
-            login: user.login!,
-            name: user.name!,
+            login: user.login,
+            name: typeof user.displayName === 'string' ? user.displayName : user.name,
             groupName: typeof user.groupName === 'string' ? user.groupName : '',
           }
         }),

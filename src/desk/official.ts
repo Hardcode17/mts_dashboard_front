@@ -37,6 +37,7 @@ export function confirmedIncident(record: Incident, card: OfficialCard): Inciden
   if (typeof card.productName === 'string' && card.productName) next.product = card.productName
   if (typeof card.assignedGroupName === 'string') next.team = card.assignedGroupName
   if (card.assignedEmployee !== undefined) next.assignee = card.assignedEmployee || undefined
+  if (card.assignedEmployeeLogin !== undefined) next.assigneeLogin = card.assignedEmployeeLogin || undefined
   const state = card.stateEnum ? itsmStateLabels[card.stateEnum] : card.state || undefined
   if (state) {
     next.state = state
