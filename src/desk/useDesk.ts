@@ -51,7 +51,7 @@ export function useDesk() {
     if (reply.desk) {
       current.current.version = reply.version
       setDesk(reply.desk)
-      if (!reply.desk.sourceError && current.current.flowVersion !== reply.version) {
+      if (!reply.desk.apiBeforeFirstSuccess && !reply.desk.sourceError && current.current.flowVersion !== reply.version) {
         const track = (flowTracker.current ??= createIncidentFlowTracker())
         current.current.flowVersion = reply.version
         setIncidentFlow(track(workspaceIncidents(reply.desk.records, reply.desk.mode), reply.now))

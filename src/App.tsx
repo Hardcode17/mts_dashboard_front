@@ -1,5 +1,5 @@
 import {lazy, Suspense, useEffect, useMemo, useRef, useState} from 'react'
-import {Button, Card, Dialog, Flex, Label, Link, Loader, Text} from '@gravity-ui/uikit'
+import {Button, Card, Dialog, Flex, Label, Link, Loader, Text, getConfig} from '@gravity-ui/uikit'
 import {initialEvents} from './demoData'
 import {correlationIndex,similarIncidents} from './desk/correlation'
 import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
@@ -12,6 +12,7 @@ import {fullTime,standNow,moscowTime} from './desk/types'
 import './desk/desk.css'
 import {Overview} from './Overview'
 import {IncidentApiRoute} from './features/incidents/ui/IncidentApiRoute'
+import {snapshotStatusMessages} from './features/incidents/ui/snapshotStatusMessages'
 import {DashboardAccount} from './features/auth/DashboardAuth'
 import {usesRealBackend} from './shared/api/mode'
 import mtsSymbol from './assets/mts-symbol.svg'
@@ -126,6 +127,9 @@ function Workspace({theme,changeTheme}:ThemeProps){
     return()=>clearTimeout(timer)
   },[pending,visible.length,desk.quietUntil])
   const recent=desk.events[0]
+  const sourceIssue = error || desk.sourceError
+  const awaitingPublication = desk.apiBeforeFirstSuccess && !sourceIssue
+  const snapshotCopy = snapshotStatusMessages[getConfig().lang === 'ru' ? 'ru' : 'en']
   const actor=desk.people.find(p=>p.id===person)??desk.people[0]
   const myTask=actor&&desk.tasks.find(t=>!t.finished&&t.attempts.at(-1)?.person===actor.id&&!t.attempts.at(-1)?.ended&&!t.attempts.at(-1)?.accepted)
   useEffect(() => {
@@ -177,15 +181,18 @@ function Workspace({theme,changeTheme}:ThemeProps){
       </header>
       <main className={'workspace' + (isDesk?' workspace-shift':'') + (wall && !showDetails ? ' wall' : '')}>
         <div className="source-status" aria-label="Состояние данных" role="group">
-          <span className="source-indicator" data-stale={Boolean(error||desk.sourceError)} aria-hidden="true" />
+          <span className="source-indicator" data-stale={Boolean(sourceIssue)} aria-hidden="true" />
           <Text variant="body-1">{mode === 'api' ? 'API рабочего места MCC' : desk.mode==='case'?'Снимок ITSM':'Данные демосмены'}</Text>
           <Text color="secondary" variant="body-1">{checked
             ? <>Последняя проверка <time dateTime={new Date(checked).toISOString()} title={fullTime(checked)+' МСК'}>{moscowTime(checked)} МСК</time></>
             : 'Ожидаем первую проверку'}</Text>
-          {(error||desk.sourceError)&&<>
-            <Text color="danger" variant="body-1" role="alert"><strong>Устаревшие данные</strong> · {error||desk.sourceError}</Text>
+          {awaitingPublication && <Text color="secondary" variant="body-1" role="status">{snapshotCopy.awaitingPublication}</Text>}
+          {sourceIssue && <Text color="danger" variant="body-1" role="alert">
+            <strong>{desk.apiBeforeFirstSuccess ? snapshotCopy.sourceUnavailable : 'Устаревшие данные'}</strong> · {sourceIssue}
+          </Text>}
+          {(sourceIssue || awaitingPublication) &&
             <Button size="s" view="outlined" onClick={()=>void refresh()}>Проверить снова</Button>
-          </>}
+          }
         </div>
         {actionError&&<div className="desk-alert" role="alert"><Text>{actionError}</Text><Button size="s" onClick={clearError}>Закрыть</Button></div>}
 

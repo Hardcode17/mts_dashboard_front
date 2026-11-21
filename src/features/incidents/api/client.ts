@@ -81,7 +81,7 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
     for (const group of first.groups) {
       counts[group.key === 'coordinator' ? 'coordinators' : group.key] = group.incidentCount
     }
-    const data = {revision: first.revision, eventSeq: first.eventSeq, counts, items}
+    const data = {revision: first.revision, eventSeq: first.eventSeq, beforeFirstSuccess: first.beforeFirstSuccess, counts, items}
     cache.set(url, {etag: response.headers.get('ETag'), data})
     return data
   }

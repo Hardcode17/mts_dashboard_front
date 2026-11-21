@@ -137,6 +137,7 @@ export interface Desk {
   lastImport: number
   lastChanges: {id: string; fields: string[]}[]
   demoCount: number
+  apiBeforeFirstSuccess?: boolean
   apiCounts?: {
     critical: number
     coordinators: number

@@ -84,6 +84,7 @@ export interface IncidentCounts {
 export interface IncidentListResponse {
   revision: number | null
   eventSeq: number
+  beforeFirstSuccess: boolean
   counts: IncidentCounts
   items: IncidentDto[]
 }

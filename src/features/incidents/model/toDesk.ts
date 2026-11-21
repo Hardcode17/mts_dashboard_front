@@ -57,7 +57,7 @@ export function toApiDesk(
   now: number,
 ): Desk {
   const records = response.items.map(toIncident)
-  const successAt = snapshot.lastSuccessAt
+  const successAt = !response.beforeFirstSuccess && snapshot.lastSuccessAt
     ? Date.parse(snapshot.lastSuccessAt)
     : 0
 
@@ -68,7 +68,7 @@ export function toApiDesk(
     seq: response.eventSeq,
     records: Object.fromEntries(records.map((incident) => [incident.key, incident])),
     input: 'file',
-    sourceError: snapshot.stale ? 'Показан последний успешно опубликованный снимок.' : '',
+    sourceError: snapshot.stale && !response.beforeFirstSuccess ? 'Показан последний успешно опубликованный снимок.' : '',
     revisions: {},
     events: [],
     signals: [],
@@ -85,6 +85,7 @@ export function toApiDesk(
     lastImport: successAt,
     lastChanges: [],
     demoCount: 0,
+    apiBeforeFirstSuccess: response.beforeFirstSuccess,
     apiCounts: response.counts,
   }
 }

@@ -259,6 +259,40 @@ test('all incident queues stay mounted while sidebar links scroll and pagination
   await expect(high.getByText(/^26–50 из /)).toBeVisible()
 })
 
+test('the dashboard distinguishes an unpublished snapshot from a stale published snapshot', async t => {
+  const {open, root} = await stand(t)
+  const page = await open('api')
+  let phase = 'waiting'
+  await page.route('**/api/dashboard/incidents?*', route => {
+    if (phase === 'waiting') return route.fulfill({json: {
+      revision: 0, eventSeq: 0, beforeFirstSuccess: true, groups: [], items: [], nextCursor: null,
+    }})
+    if (phase === 'failed') return route.fulfill({status: 503, json: {code: 'UNAVAILABLE', message: 'Service unavailable'}})
+    return route.continue()
+  })
+  await page.route('**/api/snapshot/status', route => phase === 'waiting'
+    ? route.fulfill({json: {revision: null, stale: true, lastReceivedAt: null, lastSuccessAt: null}})
+    : route.continue())
+
+  await page.goto(root + '/#queue/high')
+  await page.reload()
+  const source = page.getByRole('group', {name: 'Состояние данных'})
+  await expect(source.getByRole('status')).toHaveText('Ожидаем первый опубликованный снимок')
+  await expect(source.getByRole('alert')).toHaveCount(0)
+
+  phase = 'published'
+  await source.getByRole('button', {name: 'Проверить снова'}).click()
+  const high = page.getByRole('region', {name: 'Высокий приоритет', exact: true})
+  const row = high.getByRole('table').getByRole('link').first()
+  await expect(row).toBeVisible()
+  const number = await row.textContent()
+  await expect(source.getByRole('status')).toHaveCount(0)
+
+  phase = 'failed'
+  await expect(source.getByRole('alert')).toContainText('Устаревшие данные', {timeout: 10000})
+  await expect(row).toHaveText(number)
+})
+
 test('the wall shows arrivals and completions when the active total stays the same', async (t) => {
   const active = fixture.find(row => row.stateEnum === 'WorkInProgress' && row.priorityId < 4)
   const {open, file, root} = await stand(t, [active])
