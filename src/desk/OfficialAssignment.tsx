@@ -44,10 +44,10 @@ export function OfficialAssignment({incident, proposedTeam}: {incident: Incident
   }, [loadUsers])
   const currentEnum = itsmEnumForState(incident.state)
   const currentLogin = useMemo(
-    () => (incident.assignee ? directory?.find((user) => user.name === incident.assignee)?.login : undefined),
-    [directory, incident.assignee],
+    () => incident.assigneeLogin ?? directory?.find((user) => user.name === incident.assignee)?.login ?? '',
+    [directory, incident.assigneeLogin, incident.assignee],
   )
-  const employee = employeeChoice ?? currentLogin ?? ''
+  const employee = employeeChoice ?? currentLogin
   const userOptions = useMemo(
     () => [
       {value: '', content: 'Не назначен'},

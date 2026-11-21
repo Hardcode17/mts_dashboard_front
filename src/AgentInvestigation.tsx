@@ -310,6 +310,27 @@ function PaymentPath({incident}: {incident: Incident}) {
 }
 
 export function AgentInvestigation({incident, cardHref}: {incident: Incident; cardHref: string}) {
+  if (usesRealBackend) {
+    return (
+      <section className="agent-run" aria-label="Разбор инцидента">
+        <Link href={cardHref}>← Вернуться в карточку</Link>
+        <header className="agent-run-heading">
+          <div>
+            <Text as="p" color="secondary">{incident.id} · {incident.product}</Text>
+            <Text as="h1" variant="header-2">Расследование</Text>
+          </div>
+        </header>
+        <Text as="h2" variant="header-1">Данные карточки ITSM</Text>
+        <Text as="p">{incident.title}{incident.service ? ' · ' + incident.service : ''}</Text>
+        {incident.description && <Text as="p">{incident.description}</Text>}
+        <Text as="p" role="status" color="secondary">Данные телеметрии по этому инциденту не получены.</Text>
+      </section>
+    )
+  }
+  return <StandInvestigation incident={incident} cardHref={cardHref}/>
+}
+
+function StandInvestigation({incident, cardHref}: {incident: Incident; cardHref: string}) {
   const {desk} = useWorkspace()
   const work = desk.work[incident.key]
   const reports = work?.reports.filter(isInvestigationReport) ?? []

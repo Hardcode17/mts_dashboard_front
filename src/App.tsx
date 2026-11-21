@@ -84,7 +84,7 @@ export default function App(props:ThemeProps){
   const client=useDesk()
   const monitor=useSyncExternalStore(watchMonitorMode, monitorMode)
   const records=client.desk?.records
-  const incidents = useMemo(() => records ? workspaceIncidents(records, client.mode) : [], [records, client.mode])
+  const incidents = useMemo(() => records ? workspaceIncidents(records, usesRealBackend ? 'case' : client.mode) : [], [records, client.mode])
   if(!client.desk)return <div className={'cr cr-'+props.theme+' ops-console'}><main className="cr-work workspace ops-loading"><Card className="mcc-glass incident-panel"><Text as="h1" variant="header-2">Рабочее место MCC</Text>
     {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button></>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main></div>
   if (client.desk.apiBeforeFirstSuccess) return <main className="workspace"><Card className="mcc-glass incident-panel">
@@ -126,11 +126,11 @@ function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {inciden
   const [detailMenu,setDetailMenu] = useState(false)
   const [navigationHost,setNavigationHost] = useState<HTMLDivElement|null>(null)
   const index=useMemo(()=>correlationIndex(incidents),[incidents])
-  const events=useMemo(()=>desk.mode==='case'?desk.events:[...desk.events,...initialEvents],[desk.events,desk.mode])
+  const events=useMemo(()=>usesRealBackend || desk.mode==='case'?desk.events:[...desk.events,...initialEvents],[desk.events,desk.mode])
   const selected=incidents.find(i=>i.key===key||i.id===key)
   const showDetails=selected&&isCardRoute(hash)
   const query=new URLSearchParams(hash.split('?')[1])
-  const evidenceReport=selected&&view==='evidence'?desk.work[selected.key]?.reports.find(r=>r.id===query.get('run')):undefined
+  const evidenceReport=!usesRealBackend&&selected&&view==='evidence'?desk.work[selected.key]?.reports.find(r=>r.id===query.get('run')):undefined
   const evidenceIndex=query.get('source')
   const evidence=evidenceIndex && /^\d+$/.test(evidenceIndex) ? evidenceReport?.analysis?.evidence[Number(evidenceIndex)] : undefined
   const analysisHref = selected && evidenceReport && '#investigation/'+selected.key+'?run='+encodeURIComponent(evidenceReport.id)+'&dataset='+desk.mode
@@ -139,9 +139,9 @@ function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {inciden
   const standTool = isStand && (key === 'room' || key === 'agent')
   const isDesk=view==='desk' && !isStand
   const attention=view==='attention'
-  const pending=useMemo(()=>desk.signals.filter(s=>!s.acknowledged),[desk.signals])
-  const pendingIds=useMemo(()=>new Set(pending.map(s=>s.id)),[pending])
   const byKey=useMemo(()=>new Map(incidents.map(i=>[i.key,i])),[incidents])
+  const pending=useMemo(()=>desk.signals.filter(s=>!s.acknowledged && byKey.has(s.key)),[desk.signals,byKey])
+  const pendingIds=useMemo(()=>new Set(pending.map(s=>s.id)),[pending])
   const blocks=useMemo(()=>displayed.map(block=>({...block,signals:block.signals.filter(s=>pendingIds.has(s.id))})).filter(block=>block.signals.length),[displayed,pendingIds])
   const visible=blocks.flatMap(block=>block.signals.map(s=>s.id))
   const open=blocks.length>0,extra=pending.length-visible.length

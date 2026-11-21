@@ -12,6 +12,7 @@
     "start": "node server/start.mjs",
     "start:stand": "node mock/start.mjs",
     "test:browser": "npm run build && node --test tests/acceptance.browser.mjs",
+    "test:browser:live": "node tests/e2e/run-local.mjs",
     "test:relationships": "npm run build && node --test tests/incident-relationships.browser.mjs"
   },
   "dependencies": {

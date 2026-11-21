@@ -1,0 +1,30 @@
+# Optional offline variant: run the real, locally built Spring Boot jars.
+services:
+  backend:
+    build: !reset null
+    image: eclipse-temurin:21-jdk-jammy
+    command: ["java", "-jar", "/kan73-backend.jar"]
+    volumes:
+      - type: bind
+        source: ${MCC_E2E_BACKEND_JAR:?Set the locally built backend jar}
+        target: /kan73-backend.jar
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && grep -q "^HTTP/1.1 200" <&3'
+  itsm-mock:
+    build: !reset null
+    image: eclipse-temurin:21-jdk-jammy
+    command: ["java", "-jar", "/kan73-itsm-mock.jar"]
+    volumes:
+      - type: bind
+        source: ${MCC_E2E_ITSM_JAR:?Set the locally built itsm-mock jar}
+        target: /kan73-itsm-mock.jar
+        read_only: true
+        bind:
+          create_host_path: false

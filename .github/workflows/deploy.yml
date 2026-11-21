@@ -58,14 +58,26 @@ jobs:
           import os
           import re
           import subprocess
+          from urllib.error import HTTPError
           from urllib.parse import urlsplit
-          from urllib.request import urlopen
+          from urllib.request import Request, urlopen
 
           origin = "http://127.0.0.1:" + os.environ["FRONTEND_PORT"]
 
           def fetch(path):
               with urlopen(origin + path, timeout=10) as response:
                   return response.read()
+
+          def expect_http_error(path, status):
+              request = Request(origin + path, headers={"Accept": "application/json"})
+              try:
+                  with urlopen(request, timeout=10):
+                      pass
+              except HTTPError as error:
+                  if error.code == status:
+                      return
+                  raise
+              raise SystemExit(f"{path} did not return HTTP {status}")
 
           def check_asset(path, filename):
               expected = subprocess.check_output(["docker", "compose", "exec", "-T", "frontend", "cat", filename])
@@ -82,6 +94,8 @@ jobs:
           health = json.loads(fetch("/health"))
           if health["status"] != "UP":
               raise SystemExit("Backend health check failed")
+          expect_http_error("/api/dashboard/incidents", 401)
+          expect_http_error("/api/stand/snapshot", 404)
           authority = os.environ["OIDC_AUTHORITY"]
           discovery = json.loads(fetch(urlsplit(authority).path + "/.well-known/openid-configuration"))
           if discovery["issuer"] != authority:

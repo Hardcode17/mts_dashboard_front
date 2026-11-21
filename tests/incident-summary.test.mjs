@@ -30,3 +30,15 @@ test('an incident keeps its own meeting link through an omitted field and clears
   assert.equal(importRow({meetingUrl: url}, 4), url)
   assert.equal(importRow({meetingUrl: 'javascript:alert(1)'}, 5), null)
 })
+
+test('the live deadline starts from the server reading and continues counting down', () => {
+  const observedAt = Date.parse('2026-11-21T10:00:00Z')
+  const incident = {
+    state: 'Назначен', dueAt: observedAt - 1000,
+    deadlineStatus: {remainingSeconds: 60, overdue: false, observedAt},
+  }
+  assert.equal(incidentDeadline(incident, observedAt).label, 'До срока 1 мин')
+  assert.equal(incidentDeadline(incident, observedAt + 60_000).label, 'Срок наступил')
+  assert.equal(incidentDeadline(incident, observedAt + 60_001).overdue, true)
+  assert.equal(incidentDeadline({...incident, dueAt: null}, observedAt).label, 'Срок не указан')
+})

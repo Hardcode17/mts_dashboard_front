@@ -13,13 +13,15 @@ async function listen(handler) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   return {
     url: 'http://127.0.0.1:' + server.address().port,
-    close: () => new Promise(resolve => server.close(resolve)),
+    close: () => new Promise(resolve => {
+      server.close(resolve)
+      server.closeAllConnections()
+    }),
   }
 }
 
 test('live workspace shares real ownership and commits only the edits acknowledged by Spring', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'live-mcc-'))
-  t.after(() => rm(directory, {recursive: true, force: true}))
   const root = 'INC000000210', child = 'INC000000211'
   const fields = {
     submitDate: new Date().toISOString(), deadline: null, completionDate: null,
@@ -30,6 +32,13 @@ test('live workspace shares real ownership and commits only the edits acknowledg
     service: 'Доставка', assignedEmployee: null, itsmUrl: 'https://example.test/' + id, itsmDemo: false}))
   let revision = 0, stale = false, rejectEdit = false, sourceDown = true
   const writes = [], events = [], detailReads = []
+  const acknowledged = []
+  let rejectAck = true
+  const alarms = [
+    {eventId: 'evt-0001', incidentId: root, occurredAt: fields.submitDate, ackRequired: true},
+    {eventId: 'evt-0002', incidentId: child, occurredAt: fields.submitDate, ackRequired: true},
+    {eventId: 'evt-0003', incidentId: child, occurredAt: fields.submitDate, ackRequired: false},
+  ]
   let delayNextDetail = false, finishOlderRead
   const spring = await listen(async (req, res) => {
     const url = new URL(req.url, 'http://spring')
@@ -55,6 +64,18 @@ test('live workspace shares real ownership and commits only the edits acknowledg
       const after = Number(url.searchParams.get('afterEventSeq'))
       const newer = events.filter(e => e.eventSeq > after)
       return reply({events: newer, hasMore: false, lastEventSeq: newer.at(-1)?.eventSeq ?? after})
+    }
+    if (url.pathname === '/api/dashboard/shift/events') {
+      return reply({events: alarms.filter(event => !acknowledged.includes(event.eventId)), nextEventSeq: 3})
+    }
+    if (url.pathname === '/api/dashboard/shift/events/ack') {
+      assert.equal(person, 'alice')
+      let body = ''
+      for await (const chunk of req) body += chunk
+      assert.deepEqual(JSON.parse(body), {eventIds: ['evt-0001']})
+      if (rejectAck) return reply({code: 'CONFLICT', message: 'Сигнал уже изменился.'}, 409)
+      acknowledged.push('evt-0001')
+      return reply({confirmedEventIds: acknowledged})
     }
     if (url.pathname === '/api/dashboard/users')
       return reply([{login: 'duty', displayName: 'Инженер смены', groupName: 'Дежурные'}])
@@ -85,14 +106,17 @@ test('live workspace shares real ownership and commits only the edits acknowledg
     }
     return reply({...card, revision, eventSeq: revision})
   })
-  t.after(spring.close)
   async function start() {
     const service = liveWorkspaceService(spring.url, directory)
     const http = await listen((req, res) => service.handle(req, res, () => res.writeHead(404).end()))
     return {url: http.url, close: async () => { await http.close(); service.close() }}
   }
   let workspace = await start()
-  t.after(() => workspace.close())
+  t.after(async () => {
+    await workspace.close()
+    await spring.close()
+    await rm(directory, {recursive: true, force: true})
+  })
   async function call(path, person = 'alice', method = 'GET', body) {
     return fetch(workspace.url + '/api/workspace/' + path, {method, headers: {
       ...(person ? {authorization: 'Bearer ' + person} : {}), ...(body ? {'content-type': 'application/json'} : {}),
@@ -126,6 +150,18 @@ test('live workspace shares real ownership and commits only the edits acknowledg
   assert.equal(belongsToQueue(desk.records[root], 'critical'), false)
   assert.equal(belongsToQueue(desk.records[root], 'high'), true)
   assert.equal(desk.apiCounts.high, 2)
+  assert.deepEqual(desk.signals.map(signal => signal.id), ['evt-0001', 'evt-0002'])
+  const ack = ids => call('action', 'alice', 'POST', {type: 'ack', ids})
+  assert.equal((await ack(['1'])).status, 400)
+  assert.equal((await ack(['evt-0001'])).status, 409)
+  assert.deepEqual(acknowledged, [])
+  assert(!(await read()).desk.signals.some(signal => signal.acknowledged))
+  rejectAck = false
+  const receipt = await ack(['evt-0001'])
+  assert.equal(receipt.status, 200)
+  const {desk: afterAck} = await receipt.json()
+  assert(afterAck.quietUntil > Date.now())
+  assert.deepEqual(afterAck.signals.filter(signal => !signal.acknowledged).map(signal => signal.id), ['evt-0002'])
   const group = desk.outageGroups.find(g => g.members.length === 2)
   assert.equal(group.method, 'parent')
   const detailsBeforeChange = detailReads.length

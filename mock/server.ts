@@ -17,7 +17,7 @@ import {coordinatorGroup, type Desk, type Command, type Source} from '../src/des
 
 const liveCommands = new Set<Command['type']>([
   'ack', 'available', 'accept', 'handoff', 'link', 'unlink', 'note', 'toggleNote', 'threshold',
-  'report', 'preset', 'removePreset', 'analyze', 'advisor', 'groupClaim', 'groupAdd', 'groupExclude',
+  'report', 'preset', 'removePreset', 'advisor', 'groupClaim', 'groupAdd', 'groupExclude',
 ])
 
 export function liveWorkspaceService(backend: string, directory = process.env.MCC_STATE_DIR || resolve('.mcc-workspace')) {
@@ -56,6 +56,10 @@ export function mockService(
   let seenFile = '',
     lastChecked = 0
   function save(d: Desk, writeCards: boolean | string[] = true) {
+    // A confirmed ITSM edit can generate a local movement, but only Spring owns live alarms.
+    if (liveBackend && d.signals.some(signal => !/^evt-\d+$/.test(signal.id))) {
+      d.signals = d.signals.filter(signal => /^evt-\d+$/.test(signal.id))
+    }
     const {records, revisions, ...meta} = d
     const version = d.version + 1
     db.exec('BEGIN IMMEDIATE')
@@ -95,6 +99,7 @@ export function mockService(
     const legacy = row && d.records !== undefined
     d.records ??= readRows('incident')
     d.revisions ??= readRows('revisions')
+    if (liveBackend) d.signals = d.signals.filter(signal => /^evt-\d+$/.test(signal.id))
     const withoutGroups = !d.outageGroups
     if (withoutGroups) reconcileGroups(d,items(d),Date.now())
     desks.set(mode, d)
@@ -282,7 +287,9 @@ export function mockService(
         if ((cmd.type === 'upload' || cmd.type === 'watchFile') && mode !== 'case')
           throw Error('Выберите источник «Кейс МТС».')
         if (gateway && cmd.type === 'edit') throw new ItsmError(400,'Сохраните изменение через форму «Изменить в ITSM».')
-        if (gateway && cmd.type === 'handoff') {
+        if (live && cmd.type === 'ack') {
+          await live.acknowledge(req.headers, cmd.ids)
+        } else if (gateway && cmd.type === 'handoff') {
           await externalEdit(cmd.key,{assignedGroupName:cmd.value},cmd.expected,cmd)
         } else {
           const d = structuredClone(current())
