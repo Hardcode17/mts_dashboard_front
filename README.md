@@ -119,10 +119,11 @@ Docker-образ собирает статику в API-режиме и зап�
 подключает frontend к сети проекта `mts-dashboard-backend`. Сначала запустите
 backend, чтобы Compose создал сеть и поднял Keycloak. Funnel направляет запросы
 на frontend. Frontend передаёт публичные запросы realm `dashboard` и его ресурсов
-из `/auth/` в Keycloak, а `/auth/callback` обслуживает само приложение.
+из `/auth/` или `/keycloak/` в Keycloak, а `/auth/callback` обслуживает само приложение.
 
 В Actions Variables фронтенда укажите `FRONTEND_OIDC_AUTHORITY` как
-`https://<публичный-хост>/auth/realms/dashboard`. Это значение должно совпадать
+`https://<публичный-хост>/keycloak/realms/dashboard` (или с префиксом `/auth`).
+Это значение должно совпадать
 с `STAND_KEYCLOAK_URL` бэкенда с добавленным суффиксом `/realms/dashboard`.
 `FRONTEND_BACKEND_URL` по умолчанию использует `http://backend:8080` в сети Docker.
 
