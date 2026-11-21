@@ -99,3 +99,30 @@
   .incident-path li { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .incident-path li + li::before { content: none; }
 }
+
+.incident-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: var(--g-spacing-3) var(--g-spacing-4);
+  align-items: start;
+}
+.official-edit { max-width: 58rem; }
+.official-edit-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.official-source-badge { align-self: flex-start; }
+.history-comparison, .meeting-timeline {
+  display: grid;
+  gap: var(--g-spacing-2);
+  margin: 0;
+  padding-inline-start: 0;
+  list-style: none;
+}
+.meeting-timeline li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--g-spacing-1) var(--g-spacing-3);
+}
+.workspace > a + .meeting-panel { margin-block-start: var(--g-spacing-3); }
+@media (max-width: 40rem) {
+  .official-edit-fields { grid-template-columns: minmax(0, 1fr); }
+  .incident-journal-row { grid-template-columns: minmax(0, 1fr); gap: var(--g-spacing-1); }
+}

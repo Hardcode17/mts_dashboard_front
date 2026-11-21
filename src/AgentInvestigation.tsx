@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useId, useState} from 'react'
 import {
   Button,
   Card,
@@ -16,11 +16,13 @@ import {useWorkspace} from './desk/context'
 import {fullTime} from './desk/types'
 import {measures, recoveryTrial} from './desk/recovery'
 import {cardChanges, historyFields} from './incidentHistory'
+import './AgentInvestigation.css'
 
 function RecoveryExperiment({incident}: {incident: Incident}) {
   const {desk, refresh} = useWorkspace(),
     w = desk.work[incident.key]
   const [input, setInput] = useState('100')
+  const loadId = useId()
   const [progress, setProgress] = useState<number | null>(null),
     [failure, setFailure] = useState('')
   async function probe() {
@@ -67,7 +69,11 @@ function RecoveryExperiment({incident}: {incident: Incident}) {
       <Text>
         Модель стенда пропускает уникальные заказы через обработчик и БД. Успех — подтверждение за 30 секунд.
       </Text>
-      <TextInput label="Уникальных заказов в минуту" type="number" value={input} onUpdate={setInput} />
+      <div className="mcc-field agent-load-field">
+        <label htmlFor={loadId}>Уникальных заказов в минуту</label>
+        <TextInput id={loadId} size="l" type="number" value={input} onUpdate={setInput}
+          controlProps={{min: 1, max: 500, step: 1}} />
+      </div>
       <table className="incident-comparison">
         <caption>Прогноз своевременных оплат</caption>
         <thead>
@@ -120,50 +126,23 @@ function RecoveryExperiment({incident}: {incident: Incident}) {
 }
 
 function Diagnostics({incident}: {incident: Incident}) {
-  const {desk, act} = useWorkspace(),
-    w = desk.work[incident.key]
-  const [interval, setIntervalValue] = useState(String(w?.dataInterval ?? 5)),
-    [age, setAge] = useState(String(w?.lastRowAge ?? 2))
+  const {desk, act, busy} = useWorkspace()
+  const w = desk.work[incident.key]
+  const field = useId()
+  const [interval, setIntervalValue] = useState(String(w?.dataInterval ?? 5))
+  const [age, setAge] = useState(String(w?.lastRowAge ?? 2))
   const [object, setObject] = useState(w?.dataObject ?? 'payment_registry')
-  const [missing, setMissing] = useState(!!w?.telemetryOffline),
-    [offline, setOffline] = useState(!!w?.modelOffline),
-    [profile, setProfile] = useState(w?.profile ?? 'database')
+  const [missing, setMissing] = useState(!!w?.telemetryOffline)
+  const [offline, setOffline] = useState(!!w?.modelOffline)
+  const [profile, setProfile] = useState(w?.profile ?? 'database')
+
   return (
-    <details className="mcc-glass incident-panel">
-      <summary>Источники и проверки стенда</summary>
-      <Text>
-        Проверка таблицы / индекса: сравнивается возраст последней записи с ожидаемым интервалом обновления.
-      </Text>
-      <TextInput label="Таблица или индекс продукта" value={object} onUpdate={setObject} />
-      <Flex gap="spacing-2" wrap>
-        <TextInput
-          label="Ожидаемый интервал, мин"
-          type="number"
-          value={interval}
-          onUpdate={setIntervalValue}
-        />
-        <TextInput label="Возраст записи, мин" type="number" value={age} onUpdate={setAge} />
-      </Flex>
-      {incident.key === 'incident' && (
-        <Select
-          label="Сценарий замедления"
-          value={[profile]}
-          options={[
-            {value: 'database', content: 'Ожидание БД'},
-            {value: 'workers', content: 'Насыщение обработчиков'},
-          ]}
-          onUpdate={([v]) => setProfile(v === 'workers' ? 'workers' : 'database')}
-        />
-      )}
-      <Checkbox checked={missing} onUpdate={setMissing}>
-        Источник телеметрии недоступен
-      </Checkbox>
-      <Checkbox checked={offline} onUpdate={setOffline}>
-        Модель недоступна
-      </Checkbox>
-      <Button
-        onClick={() =>
-          void act({
+    <details className="mcc-glass incident-panel agent-diagnostics">
+      <summary><Text variant="subheader-2">Источники и проверки стенда</Text></summary>
+      <form className="mcc-disclosure-body"
+        onSubmit={async event => {
+          event.preventDefault()
+          await act({
             type: 'diagnostics',
             key: incident.key,
             number: Number(interval),
@@ -173,10 +152,52 @@ function Diagnostics({incident}: {incident: Incident}) {
             enabled: missing,
             kind: offline ? 'offline' : 'online',
           })
-        }
-      >
-        Сохранить условия проверки
-      </Button>
+        }}>
+        <div className="agent-diagnostic-groups">
+          <section className="agent-diagnostic-section" aria-labelledby={field+'-freshness'}>
+            <Text as="h2" id={field+'-freshness'} variant="subheader-2">Свежесть данных</Text>
+            <Text color="secondary">Сравниваем возраст последней записи с интервалом обновления.</Text>
+            <div className="mcc-field">
+              <label htmlFor={field+'-object'}>Таблица или индекс продукта</label>
+              <TextInput id={field+'-object'} size="l" value={object} onUpdate={setObject} controlProps={{required: true}} />
+            </div>
+            <div className="agent-intervals">
+              <div className="mcc-field">
+                <label htmlFor={field+'-interval'}>Ожидаемый интервал, мин</label>
+                <TextInput id={field+'-interval'} size="l" type="number" value={interval} onUpdate={setIntervalValue}
+                  controlProps={{required: true, min: 1, step: 1}} />
+              </div>
+              <div className="mcc-field">
+                <label htmlFor={field+'-age'}>Возраст записи, мин</label>
+                <TextInput id={field+'-age'} size="l" type="number" value={age} onUpdate={setAge}
+                  controlProps={{required: true, min: 0, step: 1}} />
+              </div>
+            </div>
+          </section>
+          <section className="agent-diagnostic-section" aria-labelledby={field+'-conditions'}>
+            <Text as="h2" id={field+'-conditions'} variant="subheader-2">Состояние стенда</Text>
+            {incident.key === 'incident' && (
+              <div className="mcc-field">
+                <label htmlFor={field+'-profile'}>Сценарий замедления</label>
+                <Select id={field+'-profile'} width="max" size="l" value={[profile]}
+                  options={[
+                    {value: 'database', content: 'Ожидание БД'},
+                    {value: 'workers', content: 'Насыщение обработчиков'},
+                  ]}
+                  onUpdate={([v]) => setProfile(v === 'workers' ? 'workers' : 'database')} />
+              </div>
+            )}
+            <div className="agent-outages">
+              <Checkbox checked={missing} onUpdate={setMissing}>Источник телеметрии недоступен</Checkbox>
+              <Checkbox checked={offline} onUpdate={setOffline}>Модель недоступна</Checkbox>
+            </div>
+          </section>
+        </div>
+        <div className="agent-diagnostic-actions">
+          <Button type="submit" size="l" view="outlined" disabled={busy}>Сохранить условия проверки</Button>
+          {w?.diagnosticsAt && <Text role="status" color="secondary">Последнее сохранение · {fullTime(w.diagnosticsAt)} МСК</Text>}
+        </div>
+      </form>
     </details>
   )
 }
@@ -235,14 +256,16 @@ export function AgentInvestigation({incident, cardHref}: {incident: Incident; ca
                 </Text>
                 <Text as="p">{item.finding}</Text>
                 <Disclosure summary="Исходная запись">
-                  <Text as="p" variant="code-inline-1" className="agent-record">
-                    {item.record}
-                  </Text>
-                  {saved && (
-                    <Link href={'#evidence/' + incident.key + '?run=' + saved.id + '&source=' + index + '&dataset=' + desk.mode}>
-                      Открыть наблюдение
-                    </Link>
-                  )}
+                  <div className="agent-source-content">
+                    <Text as="p" variant="code-inline-1" className="agent-record">
+                      {item.record}
+                    </Text>
+                    {saved && (
+                      <Link href={'#evidence/' + incident.key + '?run=' + saved.id + '&source=' + index + '&dataset=' + desk.mode}>
+                        Открыть наблюдение
+                      </Link>
+                    )}
+                  </div>
                 </Disclosure>
               </li>
             ))}
@@ -273,19 +296,19 @@ export function AgentInvestigation({incident, cardHref}: {incident: Incident; ca
             {report.hypothesis ??
               'Для определения причины недостаточно подтверждённых наблюдений по этому инциденту.'}
           </Text>
-          <div>
+          <div className="agent-finding">
             <Text as="h3" variant="subheader-2">
               Кого спросить
             </Text>
             <Text>{report.recipient}</Text>
           </div>
-          <div>
+          <div className="agent-finding">
             <Text as="h3" variant="subheader-2">
               Вопрос дежурному
             </Text>
             <Text>{report.question}</Text>
           </div>
-          <div>
+          <div className="agent-finding">
             <Text as="h3" variant="subheader-2">
               Следующая проверка
             </Text>

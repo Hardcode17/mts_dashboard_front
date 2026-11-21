@@ -1,4 +1,4 @@
-import {useMemo, useState} from 'react'
+import {useMemo, useRef, useState} from 'react'
 import {
   Button,
   Card,
@@ -192,6 +192,7 @@ export function PersonalDesk({incidents}: {incidents: Incident[]}) {
 }
 function SourceDesk() {
   const {desk, mode, source, checked, refresh, act, error} = useWorkspace()
+  const fileInput = useRef<HTMLInputElement>(null)
   const [threshold, setThreshold] = useState(String(desk.threshold)),
     [json, setJson] = useState(''),
     [problem, setProblem] = useState('')
@@ -212,40 +213,32 @@ function SourceDesk() {
         <Text as="h2" variant="header-1">
           Источник карточек
         </Text>
-        <Select
-          label="Набор данных"
-          value={[mode]}
-          options={[
-            {value: 'case', content: 'Кейс МТС · JSON'},
-            {value: 'volume', content: 'Большая смена · 3600 INC'},
-          ]}
-          onUpdate={([v]) => source(v === 'case' ? 'case' : 'volume')}
-        />
-        <Text>{error || desk.sourceError || 'Опрос работает'}</Text>
-        <Text color="secondary">Последняя проверка: {checked ? fullTime(checked) : 'ожидаем ответа'}</Text>
+        <div className="mcc-field">
+          <label htmlFor="shift-dataset">Набор данных</label>
+          <Select id="shift-dataset" width="max" value={[mode]}
+            options={[
+              {value: 'case', content: 'Кейс МТС · JSON'},
+              {value: 'volume', content: 'Большая смена · 3600 INC'},
+            ]}
+            onUpdate={([v]) => source(v === 'case' ? 'case' : 'volume')}
+          />
+        </div>
+        <div className="shift-source-status">
+          <Text>{error || desk.sourceError || 'Опрос работает'}</Text>
+          <Text color="secondary">Последняя проверка: {checked ? fullTime(checked) : 'ожидаем ответа'}</Text>
+        </div>
         <Button onClick={() => void refresh()}>Обновить сейчас</Button>
-        {mode === 'volume' && (
-          <Button
-            onClick={async () => {
-              if (await act({type: 'wifi'})) location.hash = 'incident/wifi-rostov?tab=work'
-            }}
-          >
-            Сценарий Wi-Fi · Ростов
-          </Button>
-        )}
-        <TextInput
-          label="Порог предупреждения SLA, мин"
-          type="number"
-          value={threshold}
-          onUpdate={setThreshold}
-        />
-        <Button onClick={() => void act({type: 'threshold', number: Number(threshold)})}>
-          Сохранить порог
-        </Button>
+        <div className="shift-source-threshold">
+          <div className="mcc-field">
+            <label htmlFor="shift-sla-threshold">Порог предупреждения SLA, мин</label>
+            <TextInput id="shift-sla-threshold" type="number" value={threshold} onUpdate={setThreshold} />
+          </div>
+          <Button onClick={() => void act({type: 'threshold', number: Number(threshold)})}>Сохранить порог</Button>
+        </div>
       </Card>
       <Card className="mcc-glass incident-panel">
         <Text as="h2" variant="header-1">
-          Проверка снимка ITSM
+          {mode === 'case' ? 'Проверка снимка ITSM' : 'Большая смена'}
         </Text>
         {mode === 'case' ? (
           <>
@@ -256,25 +249,29 @@ function SourceDesk() {
                 : 'загруженный снимок'}
               . В текущем снимке карточек: {Object.values(desk.records).filter(i => !i.absent).length}.
             </Text>
-            <label className="file-pick">
-              Загрузить JSON{' '}
-              <input
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) void file.text().then(upload)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-            <TextArea
-              value={json}
-              onUpdate={setJson}
-              rows={4}
-              controlProps={{'aria-label': 'JSON снимка'}}
-              placeholder="Или вставьте полный массив карточек"
+            <Button onClick={() => fileInput.current?.click()}>Загрузить JSON из файла</Button>
+            <input
+              ref={fileInput}
+              type="file"
+              hidden
+              aria-label="Загрузить JSON"
+              accept=".json,application/json"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) void file.text().then(upload).catch(() => setProblem('Не удалось прочитать файл. Выберите его ещё раз.'))
+                e.target.value = ''
+              }}
             />
+            <div className="mcc-field">
+              <label htmlFor="shift-snapshot-json">JSON снимка</label>
+              <TextArea
+                id="shift-snapshot-json"
+                value={json}
+                onUpdate={setJson}
+                rows={4}
+                placeholder="Вставьте полный массив карточек"
+              />
+            </div>
             <Flex gap="spacing-2" wrap>
               <Button disabled={!json.trim()} onClick={() => void upload(json)}>
                 Применить снимок
@@ -286,21 +283,33 @@ function SourceDesk() {
                 {problem}
               </Text>
             )}
-            <Text color="secondary">Последние изменения</Text>
-            <ul>
-              {desk.lastChanges.slice(0, 15).map((x) => (
-                <li key={x.id}>
-                  <Link href={'#incident/' + x.id + '?tab=history'}>{x.id}</Link> ·{' '}
-                  {x.fields.map((k) => historyFields[k as keyof typeof historyFields] ?? k).join(', ')}
-                </li>
-              ))}
-            </ul>
+            <div className="shift-source-changes">
+              <Text as="h3" variant="subheader-2">Последние изменения</Text>
+              {desk.lastChanges.length === 0 ? (
+                <Text color="secondary">Изменений после загрузки пока нет.</Text>
+              ) : (
+                <ul>
+                  {desk.lastChanges.slice(0, 15).map((x) => (
+                    <li key={x.id}>
+                      <Link href={'#incident/' + x.id + '?tab=history'}>{x.id}</Link> ·{' '}
+                      {x.fields.map((k) => historyFields[k as keyof typeof historyFields] ?? k).join(', ')}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </>
         ) : (
-          <Text>
-            Для живого редактирования исходной выгрузки выберите «Кейс МТС · JSON». Большая смена
-            предназначена для проверки длинных очередей.
-          </Text>
+          <>
+            <Text>Для загрузки снимка ITSM выберите «Кейс МТС · JSON».</Text>
+            <Button
+              onClick={async () => {
+                if (await act({type: 'wifi'})) location.hash = 'incident/wifi-rostov?tab=work'
+              }}
+            >
+              Сценарий Wi-Fi · Ростов
+            </Button>
+          </>
         )}
       </Card>
     </div>

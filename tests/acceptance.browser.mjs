@@ -8,6 +8,7 @@ import {join} from 'node:path'
 import {chromium, expect} from '@playwright/test'
 import serve from 'serve-handler'
 import {mockService} from '../mock/server.ts'
+import {checkExpandedAgentForm} from './agent-form-smoke.mjs'
 
 const fixture = JSON.parse(
   await readFile(new URL('../mock/fixtures/incidents.json', import.meta.url), 'utf8'),
@@ -85,6 +86,10 @@ test('acceptance: file polling, critical burst, resolution, external card, revis
   const dlg = p.getByRole('dialog')
   await expect(dlg.getByText(row.id, {exact: true})).toBeVisible({timeout: 5000})
   assert(Date.now() - start <= 5000)
+  await p.setViewportSize({width: 320, height: 740})
+  const screen = p.locator('.signal-screen')
+  await expect(screen).toBeVisible()
+  assert(await screen.evaluate(el => el.scrollWidth <= el.clientWidth + 1))
   const frozen = (await read('case')).signals[0].id
   await dlg.getByRole('button', {name: 'Демо: ещё один крит'}).click()
   await expect(dlg.getByText(/Поступило ещё/)).toBeVisible()
@@ -352,4 +357,33 @@ test('refreshing a full card preserves the route back to its filtered queue', as
   await page.getByRole('link', {name: 'Полная карточка'}).click()
   await page.reload()
   await expect(page.locator('main a').filter({hasText: /←/}).first()).toHaveAttribute('href', listing)
+})
+
+test('expanded agent diagnostics keep labels, checkboxes and the submit action visibly separated', async t => {
+  const {open, root} = await stand(t)
+  const p = await open()
+  for (const [key, width, theme] of [['incident', 1440, 'light'], ['access', 320, 'dark']]) {
+    await p.setViewportSize({width, height: 900})
+    await p.goto(root + '/#investigation/' + key)
+    await p.locator('input[value="'+theme+'"]').check()
+    const summary = p.locator('summary').filter({hasText: 'Источники и проверки стенда'})
+    await summary.focus()
+    await p.keyboard.press('Enter')
+    const form = p.locator('.agent-diagnostics form')
+    await expect(form).toBeVisible()
+    const interval = form.getByRole('spinbutton', {name: 'Ожидаемый интервал, мин'})
+    const age = form.getByRole('spinbutton', {name: 'Возраст записи, мин'})
+    const save = form.getByRole('button', {name: 'Сохранить условия проверки'})
+    await checkExpandedAgentForm(form, width)
+    await form.getByLabel('Таблица или индекс продукта').fill('analytics_' + 'trace'.repeat(30))
+    await interval.fill('7')
+    await age.fill('12')
+    await save.click()
+    await expect(form.getByRole('status')).toContainText('Последнее сохранение')
+    await summary.click()
+    await expect(form).toBeHidden()
+    await p.getByRole('button', {name:'Запустить анализ'}).click()
+    await expect(p.getByRole('heading', {name:'Вывод агента'})).toBeVisible()
+    assert(await p.evaluate(() => document.documentElement.scrollWidth === innerWidth))
+  }
 })

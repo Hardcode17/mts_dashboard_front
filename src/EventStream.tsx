@@ -84,14 +84,21 @@ export function EventJournal({incidents, events, params, update}: StreamProps & 
   return (
     <Card className="mcc-glass shift-stream shift-stream--full">
       <div className="shift-stream-filters">
-        <TextInput size="l" type="search" value={query} hasClear
-          placeholder="Номер инцидента, продукт или текст события"
-          controlProps={{'aria-label': 'Поиск по журналу'}}
-          onUpdate={q => update({q, page: ''})} />
-        <Select size="l" aria-label="Тип события" value={[kind]} options={kindOptions}
-          onUpdate={([value]) => update({kind: value === 'all' ? '' : value, page: ''})}/>
-        <Select size="l" aria-label="Период журнала" value={[period]} options={periods}
-          onUpdate={([value]) => update({period: value === 'shift' ? '' : value, page: ''})}/>
+        <div className="mcc-field">
+          <label htmlFor="journal-search">Поиск по журналу</label>
+          <TextInput id="journal-search" size="l" type="search" value={query} hasClear
+            placeholder="Номер инцидента, продукт или текст события" onUpdate={q => update({q,page:''})} />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="journal-kind">Тип события</label>
+          <Select id="journal-kind" width="max" size="l" value={[kind]} options={kindOptions}
+            onUpdate={([value]) => update({kind:value === 'all' ? '' : value,page:''})} />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="journal-period">Период журнала</label>
+          <Select id="journal-period" width="max" size="l" value={[period]} options={periods}
+            onUpdate={([value]) => update({period:value === 'shift' ? '' : value,page:''})} />
+        </div>
       </div>
       <Flex className="shift-stream-status" justifyContent="space-between" alignItems="center" gap="spacing-3" wrap="wrap">
         <Text role="status" color="secondary">
@@ -103,7 +110,7 @@ export function EventJournal({incidents, events, params, update}: StreamProps & 
       {found.length > 0 ? <>
         <EventRows events={found.slice(start, start + pageSize)} byKey={byKey}/>
         {found.length > pageSize && <nav className="shift-stream-pagination" aria-label="Страницы журнала">
-          <Pagination compact showInput page={page} pageSize={pageSize} total={found.length} onUpdate={n => update({page: String(n)})}/>
+          <Pagination className="journal-page-controls" compact showInput page={page} pageSize={pageSize} total={found.length} onUpdate={n => update({page: String(n)})}/>
         </nav>}
       </> : <Flex className="shift-stream-empty" direction="column" alignItems="flex-start" gap="spacing-2">
         <Text variant="subheader-2">{snapshot.length ? 'Совпадений нет' : 'В журнале пока нет событий'}</Text>
