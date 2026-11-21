@@ -1,7 +1,7 @@
 import {AsyncLocalStorage} from 'node:async_hooks'
 import type {IncomingHttpHeaders} from 'node:http'
 import type {Incident} from '../src/demoData.ts'
-import type {Desk} from '../src/desk/types.ts'
+import type {Desk, Signal} from '../src/desk/types.ts'
 import {itsmStateLabels} from '../src/desk/types.ts'
 import {createIncidentsApi} from '../src/features/incidents/api/client.ts'
 import {toIncident} from '../src/features/incidents/model/toDesk.ts'
@@ -28,9 +28,34 @@ export function livePublication(
   let enriching = false
   let checked = 0
   let generation = 0
+  let alarmGeneration = 0
   const pending = new Set<string>()
   const lifetime = new AbortController()
   const timeout = () => AbortSignal.any([lifetime.signal, AbortSignal.timeout(7500)])
+
+  async function syncAlarms() {
+    const epoch = alarmGeneration
+    const signals: Signal[] = []
+    const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(2500)])
+    let cursor = 0
+    for (;;) {
+      const page: {
+        events: {eventId: string; incidentId: string; occurredAt: string; ackRequired: boolean}[]
+        nextEventSeq: number
+      } = await journal.request(`/api/dashboard/shift/events?sinceEventSeq=${cursor}&limit=500`, {}, signal)
+      for (const event of page.events) {
+        if (event.ackRequired) signals.push({id: event.eventId, key: event.incidentId, at: Date.parse(event.occurredAt)})
+      }
+      if (page.events.length < 500 || page.nextEventSeq <= cursor) break
+      cursor = page.nextEventSeq
+    }
+    if (epoch !== alarmGeneration || lifetime.signal.aborted) return
+    const desk = current()
+    const acknowledged = desk.signals.filter(signal => signal.acknowledged !== undefined)
+    const pending = desk.signals.filter(signal => signal.acknowledged === undefined)
+    if (pending.length === signals.length && pending.every((signal, i) => signal.id === signals[i].id)) return
+    save({...desk, signals: [...acknowledged, ...signals]}, false)
+  }
 
   function metadata(error: string, first: boolean, successAt?: number) {
     const desk = current()
@@ -174,10 +199,37 @@ export function livePublication(
     }
     checked = now
     void enrich(headers).catch(() => {})
-    if (!list.beforeFirstSuccess) void consumeChanges(headers)
+    if (!list.beforeFirstSuccess) {
+      void consumeChanges(headers)
+      await syncAlarms().catch(() => {})
+    }
   }
 
   return {
+    async acknowledge(headers: IncomingHttpHeaders, ids: string[] | undefined) {
+      if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== 'string' || !/^evt-\d+$/.test(id))) {
+        throw new ItsmError(400, 'Нет показанных сигналов Spring.')
+      }
+      const token = headers.authorization!.replace(/^Bearer /i, '')
+      const result = await credential.run(token, () =>
+        journal.request<{confirmedEventIds: string[]}>('/api/dashboard/shift/events/ack', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({eventIds: ids}),
+        }, timeout()),
+      ).catch(error => {
+        if (error instanceof ApiError) throw new ItsmError(error.status, error.message)
+        throw error
+      })
+      alarmGeneration++
+      const desk = current()
+      const confirmed = new Set(result.confirmedEventIds)
+      const now = Date.now()
+      const signals = desk.signals.map(signal =>
+        signal.acknowledged === undefined && confirmed.has(signal.id) ? {...signal, acknowledged: now} : signal,
+      )
+      save({...desk, signals, quietUntil: now + 30_000}, false)
+    },
     async refresh(headers: IncomingHttpHeaders) {
       if (reading) return reading
       const token = headers.authorization!.replace(/^Bearer /i, '')

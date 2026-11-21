@@ -31,6 +31,7 @@ export interface Incident {
   impact?: string
   flags?: string[]
   dueAt?: number | null
+  deadlineStatus?: {remainingSeconds: number; overdue: boolean; observedAt: number}
   site?:string
   specialists?: number
   workMinutes?:number
