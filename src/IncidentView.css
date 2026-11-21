@@ -7,16 +7,8 @@
   margin: 0;
 }
 
-.incident-view > a, .incident-panel > button {
+.incident-view > a {
   align-self: flex-start;
-}
-
-.incident-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-spacing-4);
-  min-width: 0;
-  padding: var(--g-spacing-5);
 }
 
 .incident-columns, .incident-evidence {
@@ -28,12 +20,25 @@
 
 .incident-evidence { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
 .incident-tab-area { min-width: 0; }
-.incident-impact-chart { height: 11rem; width: 100%; }
-.incident-critical {
-  --g-color-base-misc-light: var(--mcc-critical-soft);
-  --g-color-text-misc-heavy: var(--mcc-critical);
+.incident-next-step { margin-block-start: var(--g-spacing-4); }
+.agent-checks { margin: 0; padding-inline-start: var(--g-spacing-6); }
+.agent-checks li { padding: var(--g-spacing-2) 0 var(--g-spacing-3) var(--g-spacing-1); }
+.agent-checks li + li { border-top: 1px solid var(--mcc-hairline); }
+.agent-checks li::marker { color: var(--g-color-text-secondary); }
+.agent-checks li > p { margin-block: var(--g-spacing-1) var(--g-spacing-2); }
+.agent-record { overflow-wrap: anywhere; padding-block: var(--g-spacing-2); }
+.incident-tabs { max-width: 100%; overflow-x: auto; }
+.history-list { margin: 0; font-variant-numeric: tabular-nums; }
+.history-entry { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--g-spacing-4); }
+.history-fields { display: grid; gap: var(--g-spacing-4); }
+.history-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--g-spacing-2); margin: var(--g-spacing-2) 0 0; }
+.history-values dt { color: var(--g-color-text-secondary); font-size: var(--g-text-caption-2-font-size); }
+.history-values dd { margin: var(--g-spacing-1) 0 0; overflow-wrap: anywhere; }
+@media (max-width: 36rem) {
+  .history-entry { grid-template-columns: 1fr; gap: var(--g-spacing-2); }
 }
-.incident-hypothesis { --mcc-glass-fill: color-mix(in srgb, var(--mcc-critical-soft) 25%, var(--mcc-rail-fill)); }
+.incident-impact-chart { height: 11rem; width: 100%; }
+
 
 .incident-list, .incident-path { list-style: none; margin: 0; padding: 0; }
 .incident-list li { padding-block: var(--g-spacing-3); }
@@ -90,7 +95,6 @@
 
 @media (max-width: 48rem) {
   .incident-columns, .incident-evidence { grid-template-columns: minmax(0, 1fr); }
-  .incident-panel { padding: var(--g-spacing-4); }
   .incident-path { grid-template-columns: 1fr; gap: var(--g-spacing-2); }
   .incident-path li { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .incident-path li + li::before { content: none; }
