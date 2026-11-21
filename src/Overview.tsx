@@ -1,6 +1,6 @@
-import {memo, useMemo} from 'react'
+import {memo, useMemo, useRef, type RefObject} from 'react'
 import {Button, Card, Flex, Label, Link, Pagination, Progress, Select, Text, TextInput, useViewportSize} from '@gravity-ui/uikit'
-import {Table, useTable} from '@gravity-ui/table'
+import {Table, useRowVirtualizer, useTable} from '@gravity-ui/table'
 import type {ColumnDef} from '@gravity-ui/table/tanstack'
 import {type Incident, type ShiftEvent} from './demoData'
 import {EventStream, EventJournal} from './EventStream'
@@ -81,10 +81,24 @@ const columns: ColumnDef<Incident>[] = [
   {accessorKey: 'due', size: 110, header: 'Срок решения', cell: ({row}) => <Deadline item={row.original} />},
 ]
 
-const IncidentTable = memo(function IncidentTable({rows, label}: {rows: Incident[]; label: string}) {
+const IncidentTable = memo(function IncidentTable({rows, label, scroll}: {
+  rows: Incident[]
+  label: string
+  scroll: RefObject<HTMLDivElement | null>
+}) {
   const {width} = useViewportSize()
   const table = useTable({data: rows, columns, getRowId: (item) => item.key})
-  if (width !== undefined && width <= 864) return (
+  const mobile = width !== undefined && width <= 864
+  const virtual = !mobile && rows.length >= 50
+  const rowVirtualizer = useRowVirtualizer({
+    enabled: virtual,
+    count: rows.length,
+    estimateSize: () => 64,
+    overscan: 5,
+    getItemKey: (index) => rows[index].key,
+    getScrollElement: () => scroll.current,
+  })
+  if (mobile) return (
     <ul className="overview-incident-list" aria-label={label}>
       {rows.map(item => <li key={item.key}>
         <Link view="primary" href={'#drawer/' + item.key}>
@@ -95,7 +109,7 @@ const IncidentTable = memo(function IncidentTable({rows, label}: {rows: Incident
       </li>)}
     </ul>
   )
-  return <Table table={table} size="s" stickyHeader verticalAlign="middle" className="overview-data-table" attributes={{'aria-label': label}} />
+  return <Table table={table} rowVirtualizer={virtual ? rowVirtualizer : undefined} size="s" stickyHeader verticalAlign="middle" className="overview-data-table" attributes={{'aria-label': label}} />
 })
 
 function queueHref(queue: OverviewQueue, params: URLSearchParams) {
@@ -105,6 +119,7 @@ function queueHref(queue: OverviewQueue, params: URLSearchParams) {
 
 export function Overview({listingHash, incidents, events, wall, summary, activeQueue = 'critical'}: Props) {
   const {desk,now}=useWorkspace()
+  const tableScroll = useRef<HTMLDivElement>(null)
   const reference=standNow(desk,now)
   const hash=listingHash
   const params = useMemo(() => new URLSearchParams(hash.split('?')[1]), [hash])
@@ -163,6 +178,9 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
     const critical = [...groups.critical].sort(incidentOrder).slice(0, 3)
     return <div className={wall ? 'overview-wall' : 'overview-summary'}>
       <div className="overview-wall-main">
+        {desk.lastImport > 0 && <Text color="secondary" variant="caption-2">
+          Последнее обновление снимка: {fullTime(desk.lastImport)} МСК
+        </Text>}
         <div className="overview-wall-stats">
           {queues.map((queue) => <Link key={queue.key} view="primary" href={'#queue/' + queue.key} className={'overview-stat mcc-glass mcc-tile overview-kind-' + queue.key}>
             <Text variant="body-1" className="overview-stat-label">{queue.title}</Text>
@@ -231,8 +249,9 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
       </div>
       <QueueFilters incidents={incidents} queue={groupKey} params={params} update={update} reset={() => update(clearFilters)} />
       {pageRows.length ? <>
-        <div className="overview-table-scroll" tabIndex={0} role="region" aria-label="Список инцидентов">
-          <IncidentTable rows={pageRows} label={selected.title} />
+        <div className={pageRows.length >= 50 ? 'overview-table-scroll overview-table-scroll-long' : 'overview-table-scroll'}
+          ref={tableScroll} tabIndex={0} role="region" aria-label="Список инцидентов">
+          <IncidentTable rows={pageRows} label={selected.title} scroll={tableScroll} />
         </div>
         <div className="overview-table-footer">
           <Text color="secondary">{format.format(first + 1)}–{format.format(first + pageRows.length)} из {format.format(results.length)}</Text>

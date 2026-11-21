@@ -387,3 +387,16 @@ test('expanded agent diagnostics keep labels, checkboxes and the submit action v
     assert(await p.evaluate(() => document.documentElement.scrollWidth === innerWidth))
   }
 })
+
+test('a long desktop queue only mounts the visible rows and scrolls to more incidents', async t => {
+  const {open, root} = await stand(t)
+  const page = await open('volume', 'anna', 1440)
+  await page.goto(root + '/#queue/all?size=100')
+  const scroll = page.getByRole('region', {name: 'Список инцидентов'})
+  const rows = scroll.locator('tbody tr')
+  await expect(rows.first()).toBeVisible()
+  assert((await rows.count()) < 100)
+  const firstRow = await rows.first().textContent()
+  await scroll.evaluate(el => { el.scrollTop = el.scrollHeight })
+  await expect.poll(() => rows.first().textContent()).not.toBe(firstRow)
+})

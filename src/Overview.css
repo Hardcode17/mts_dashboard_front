@@ -67,6 +67,7 @@
   overflow: auto;
   border-block: 1px solid var(--mcc-hairline);
 }
+@media (min-width: 865px) { .overview-table-scroll-long { height: max(24rem, 55vh); } }
 .overview-data-table { --g-color-base-background: var(--mcc-surface); --g-color-line-generic: var(--mcc-hairline); width: 100%; min-width: 48rem; font-variant-numeric: tabular-nums; }
 .overview-data-table th, .overview-data-table td { padding-block: var(--g-spacing-2); }
 .overview-data-table tbody tr:hover { background: var(--g-color-base-simple-hover); }
