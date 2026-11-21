@@ -1,8 +1,9 @@
 import {useState} from 'react'
-import {Button, Flex, Select, TextInput, Link} from '@gravity-ui/uikit'
+import {Button, Select, TextInput, Link} from '@gravity-ui/uikit'
 import type {Incident} from '../demoData'
 import {useWorkspace} from './context'
 import {priorityNames} from './types'
+
 type Props = {
   incidents: Incident[]
   params: URLSearchParams
@@ -10,88 +11,105 @@ type Props = {
   reset: () => void
   queue: string
 }
+
+const fields = [
+  ['priority', 'Приоритет'],
+  ['product', 'Продукт'],
+  ['team', 'Команда'],
+  ['state', 'Статус'],
+  ['serviceType', 'Тип сервиса'],
+] as const
+
 export function QueueFilters({incidents, params, update, queue, reset}: Props) {
-  const {desk, act, person} = useWorkspace(),
-    [name, setName] = useState('')
-  const fields = [
-    ['priority', 'Приоритет'],
-    ['product', 'Продукт'],
-    ['team', 'Команда'],
-    ['state', 'Статус'],
-    ['serviceType', 'Тип сервиса'],
-  ] as const
+  const {desk, act, person} = useWorkspace()
+  const [name, setName] = useState('')
   const list = desk.presets[person] ?? []
-  const activeFilters = [...fields.map(([field]) => field), 'deadline'].filter(key => params.get(key)).length
+  const activeFilters = [...fields.map(([field]) => field), 'deadline'].filter((key) =>
+    params.get(key),
+  ).length
   return (
     <details className="queue-filters">
-      <summary>Фильтры и сохранённые представления{activeFilters > 0 && ' · применено: ' + activeFilters}</summary>
-      <Flex wrap gap="spacing-2">
-        {fields.map(([field, label]) => {
-          const values = [...new Set(incidents.map((i) => String(i[field] ?? '')).filter(Boolean))].sort()
-          return (
+      <summary>
+        Фильтры и сохранённые представления{activeFilters > 0 && ' · применено: ' + activeFilters}
+      </summary>
+      <div className="mcc-disclosure-body">
+        <div className="queue-filter-fields">
+          {fields.map(([field, label]) => {
+            const values = [...new Set(incidents.map((i) => String(i[field] ?? '')).filter(Boolean))].sort()
+            return (
+              <div key={field} className="mcc-field">
+                <label htmlFor={'queue-filter-' + field}>{label}</label>
+                <Select
+                  id={'queue-filter-' + field}
+                  width="max"
+                  filterable
+                  options={['', ...values].map((v) => ({
+                    value: v,
+                    content: !v ? 'Все' : field === 'priority' ? (priorityNames[Number(v) - 1] ?? v) : v,
+                  }))}
+                  value={[params.get(field) ?? '']}
+                  onUpdate={([v]) => update({[field]: v, page: ''})}
+                />
+              </div>
+            )
+          })}
+          <div className="mcc-field">
+            <label htmlFor="queue-filter-deadline">Срок решения</label>
             <Select
-              key={field}
-              label={label}
-              aria-label={label}
-              filterable
-              options={['', ...values].map((v) => ({value: v, content: !v ? 'Все' : field === 'priority' ? priorityNames[Number(v) - 1] ?? v : v}))}
-              value={[params.get(field) ?? '']}
-              onUpdate={([v]) => update({[field]: v, page: ''})}
+              id="queue-filter-deadline"
+              width="max"
+              value={[params.get('deadline') ?? '']}
+              options={[
+                {value: '', content: 'Любой срок'},
+                {value: 'late', content: 'Просрочено'},
+                {value: 'near', content: 'Близкий срок'},
+                {value: 'none', content: 'Без срока'},
+              ]}
+              onUpdate={([v]) => update({deadline: v, page: ''})}
             />
-          )
-        })}
-        <Select
-          label="Показать"
-          value={[params.get('deadline') ?? '']}
-          options={[
-            {value: '', content: 'Любой срок'},
-            {value: 'late', content: 'Просрочено'},
-            {value: 'near', content: 'Близкий срок'},
-            {value: 'none', content: 'Без срока'},
-          ]}
-          onUpdate={([v]) => update({deadline: v, page: ''})}
-        />
-        <Button onClick={reset}>
+          </div>
+        </div>
+        <Button className="queue-filter-reset" onClick={reset}>
           Сбросить фильтры
         </Button>
-      </Flex>
-      <Flex alignItems="center" gap="spacing-2" wrap>
-        <TextInput
-          placeholder="Название представления"
-          value={name}
-          onUpdate={setName}
-          controlProps={{'aria-label': 'Название представления'}}
-        />
-        <Button
-          disabled={!name.trim()}
-          onClick={async () => {
-            if (
-              await act({
-                type: 'preset',
-                person,
-                title: name,
-                value: '#queue/' + queue + '?' + params.toString(),
-              })
-            )
-              setName('')
-          }}
-        >
-          Сохранить представление
-        </Button>
-      </Flex>
-      {list.map((p) => (
-        <Flex key={p.name} alignItems="center" gap="spacing-2">
-          <Link href={p.href}>{p.name}</Link>
-          <Button
-            size="s"
-            view="flat-secondary"
-            aria-label={'Удалить ' + p.name}
-            onClick={() => void act({type: 'removePreset', person, title: p.name})}
-          >
-            Удалить
-          </Button>
-        </Flex>
-      ))}
+        <div className="queue-presets">
+          <div className="queue-preset-form">
+            <div className="mcc-field">
+              <label htmlFor="queue-preset-name">Название представления</label>
+              <TextInput id="queue-preset-name" value={name} onUpdate={setName} />
+            </div>
+            <Button
+              disabled={!name.trim()}
+              onClick={async () => {
+                if (
+                  await act({
+                    type: 'preset',
+                    person,
+                    title: name,
+                    value: '#queue/' + queue + '?' + params.toString(),
+                  })
+                )
+                  setName('')
+              }}
+            >
+              Сохранить представление
+            </Button>
+          </div>
+          {list.map((p) => (
+            <div className="queue-saved-preset" key={p.name}>
+              <Link href={p.href}>{p.name}</Link>
+              <Button
+                size="s"
+                view="flat-secondary"
+                aria-label={'Удалить ' + p.name}
+                onClick={() => void act({type: 'removePreset', person, title: p.name})}
+              >
+                Удалить
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
     </details>
   )
 }

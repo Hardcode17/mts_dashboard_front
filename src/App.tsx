@@ -160,7 +160,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
             <Button size="s" view="outlined" onClick={()=>void refresh()}>Проверить снова</Button>
           </>}
         </div>
-        {actionError&&<div className="desk-alert" role="alert">{actionError}<Button size="s" onClick={clearError}>Закрыть</Button></div>}
+        {actionError&&<div className="desk-alert" role="alert"><Text>{actionError}</Text><Button size="s" onClick={clearError}>Закрыть</Button></div>}
 
         {pending.length>0 && !open && <div className="pending-signals" role="status">
             <Text variant="subheader-1">Ожидают подтверждения: {pending.length} · {pending.slice(0,3).map(s=>incidents.find(i=>i.key===s.key)?.id).join(', ')}</Text>

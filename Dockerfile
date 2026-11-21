@@ -5,6 +5,15 @@ RUN npm ci
 COPY . .
 RUN npm run lint && npm run build
 
+FROM node:24-alpine AS stand-browser
+RUN apk add --no-cache chromium
+ENV CHROMIUM_PATH=/usr/bin/chromium
+WORKDIR /check
+COPY --from=build /app/node_modules/playwright-core ./node_modules/playwright-core
+COPY tests/agent-form-smoke.mjs .
+USER node
+CMD ["node", "agent-form-smoke.mjs"]
+
 FROM node:24-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production

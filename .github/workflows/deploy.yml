@@ -79,6 +79,12 @@ jobs:
           print(f"Published port {os.environ['FRONTEND_PORT']}: HTML and {bundle[1]} match the running image; API returned {len(desk['records'])} incidents")
           PY
 
+      - name: Open the published agent form in Chromium
+        timeout-minutes: 10
+        run: |
+          docker build --target stand-browser --tag mts-dashboard-front-stand-browser .
+          docker run --rm --network host --shm-size=256m --env FRONTEND_PORT mts-dashboard-front-stand-browser
+
       - name: Show deployment status
         run: docker compose ps
 

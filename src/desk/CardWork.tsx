@@ -6,6 +6,7 @@ import {dueInstant, emptyWork, fullTime, priorityNames} from './types'
 import {cardTimeline} from './timeline'
 import {RoutingAdvisor} from './RoutingAdvisor'
 import {MessageComposer} from './NotificationCenter'
+import '../IncidentView.css'
 
 export function Collaboration({item, incidents}: {item: Incident; incidents: Incident[]}) {
   const {desk, act, person} = useWorkspace(),
@@ -111,17 +112,28 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
         <Text as="h2" variant="header-1">
           Заметки и действия
         </Text>
-        <Flex gap="spacing-2" wrap>
-          <Select
-            label="Тип"
-            value={[kind]}
-            options={['Заметка', 'Следующий шаг', 'Проверка'].map((value) => ({value, content: value}))}
-            onUpdate={([v]) => setKind(v)}
-          />
-          <TextInput label="Ответственный" value={owner} onUpdate={setOwner} />
-          <TextInput label="Срок проверки" placeholder="ЧЧ:ММ" value={due} onUpdate={setDue} />
-        </Flex>
-        <TextArea rows={2} controlProps={{'aria-label': 'Текст записи'}} value={note} onUpdate={setNote} />
+        <div className="incident-fields">
+          <div className="mcc-field">
+            <label htmlFor="note-kind">Тип</label>
+            <Select id="note-kind" width="max"
+              value={[kind]}
+              options={['Заметка', 'Следующий шаг', 'Проверка'].map((value) => ({value, content: value}))}
+              onUpdate={([v]) => setKind(v)}
+            />
+          </div>
+          <div className="mcc-field">
+            <label htmlFor="note-owner">Ответственный</label>
+            <TextInput id="note-owner" value={owner} onUpdate={setOwner} />
+          </div>
+          <div className="mcc-field">
+            <label htmlFor="note-due">Срок проверки</label>
+            <TextInput id="note-due" placeholder="ЧЧ:ММ" value={due} onUpdate={setDue} />
+          </div>
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="note-text">Текст записи</label>
+          <TextArea id="note-text" rows={2} value={note} onUpdate={setNote} />
+        </div>
         <Button
           disabled={!note.trim() || !owner.trim()}
           onClick={async () => {
@@ -187,9 +199,13 @@ export function Collaboration({item, incidents}: {item: Incident; incidents: Inc
             <summary>
               {r.title} · {fullTime(r.at)}
             </summary>
-            <p className="report-text">{r.content}</p>
-            {r.analysis && <Link href={'#investigation/' + item.key + '?run=' + r.id + '&tab=work&dataset=' + desk.mode}>Открыть сохранённый разбор</Link>}
-            <Text color="secondary">Версия данных {r.revision}</Text>
+            <div className="mcc-disclosure-body">
+              <p className="report-text">{r.content}</p>
+              <Flex alignItems="center" gap="spacing-3" wrap>
+                {r.analysis && <Link href={'#investigation/' + item.key + '?run=' + r.id + '&tab=work&dataset=' + desk.mode}>Открыть сохранённый разбор</Link>}
+                <Text color="secondary">Версия данных {r.revision}</Text>
+              </Flex>
+            </div>
           </details>
         ))}
       </Card>
@@ -206,7 +222,7 @@ export function Meeting({item}: {item: Incident}) {
     [team, setTeam] = useState('')
   if (!room)
     return (
-      <Card className="mcc-glass incident-panel">
+      <Card className="mcc-glass incident-panel meeting-panel">
         <Text as="h2" variant="header-1">
           Аварийная комната
         </Text>
@@ -215,7 +231,7 @@ export function Meeting({item}: {item: Incident}) {
       </Card>
     )
   return (
-    <Card className="mcc-glass incident-panel">
+    <Card className="mcc-glass incident-panel meeting-panel">
       <Flex alignItems="center" gap="spacing-2" wrap>
         <Text as="h2" variant="header-1">
           Аварийная комната
@@ -279,32 +295,41 @@ export function Meeting({item}: {item: Incident}) {
       {!!room.timeline?.length && (
         <details>
           <summary>История участия и уведомлений</summary>
-          {room.timeline.map((e, i) => (
-            <p key={i}>
-              {fullTime(e.at)} · {e.who} · {e.text}
-            </p>
-          ))}
+          <ol className="mcc-disclosure-body meeting-timeline">
+            {room.timeline.map((e, i) => (
+              <li key={i}>
+                <Text as="time" color="secondary">{fullTime(e.at)}</Text>
+                <span>{e.who} · {e.text}</span>
+              </li>
+            ))}
+          </ol>
         </details>
       )}
       {!room.ended ? (
         <>
-          <Flex gap="spacing-2" wrap>
-            <TextInput label="Участник" value={invite} onUpdate={setInvite} />
-            <TextInput label="Команда участника" value={team} onUpdate={setTeam} />
-            <Button
-              disabled={!invite.trim() || !team.trim()}
-              onClick={async () => {
-                if (
-                  await act({type: 'roomMember', key: item.key, owner: invite, kind: 'invite', value: team})
-                ) {
-                  setInvite('')
-                  setTeam('')
-                }
-              }}
-            >
-              Пригласить на стенде
-            </Button>
-          </Flex>
+          <div className="incident-fields">
+            <div className="mcc-field">
+              <label htmlFor="invite-person">Участник</label>
+              <TextInput id="invite-person" value={invite} onUpdate={setInvite} />
+            </div>
+            <div className="mcc-field">
+              <label htmlFor="invite-team">Команда участника</label>
+              <TextInput id="invite-team" value={team} onUpdate={setTeam} />
+            </div>
+          </div>
+          <Button
+            disabled={!invite.trim() || !team.trim()}
+            onClick={async () => {
+              if (
+                await act({type: 'roomMember', key: item.key, owner: invite, kind: 'invite', value: team})
+              ) {
+                setInvite('')
+                setTeam('')
+              }
+            }}
+          >
+            Пригласить на стенде
+          </Button>
           <Text color="secondary">Транскрипт готовится после завершения встречи.</Text>
           <Button onClick={() => void act({type: 'meetingEnd', key: item.key})}>Завершить демовстречу</Button>
         </>
@@ -361,48 +386,61 @@ export function OfficialCard({item}: {item: Incident}) {
     [dateChanged, setDateChanged] = useState(false),
     [expected, setExpected] = useState(item.updatedAt ?? 0)
   return (
-    <Card className="mcc-glass incident-panel">
+    <Card className="mcc-glass incident-panel official-edit">
       <Link href={'#incident/' + item.key}>← В дашборд</Link>
       <Text as="h1" variant="header-2">
         ITSM · карточка {item.id}
       </Text>
-      <Label theme="info">Мок официального источника</Label>
+      <Label className="official-source-badge" theme="info">Мок официального источника</Label>
       <Text>
         {item.product} · {item.title}
       </Text>
-      <div className="desk-grid">
-        <TextInput label="Группа назначения" value={team} onUpdate={setTeam} />
-        <TextInput label="Исполнитель" value={employee} onUpdate={setEmployee} />
-        <Select
-          label="Приоритет"
-          value={[priority]}
-          options={priorityNames.map((content, i) => ({value: String(i + 1), content}))}
-          onUpdate={([v]) => setPriority(v)}
-        />
-        <Select
-          label="Статус"
-          value={[status]}
-          options={['Назначен', 'В работе', 'Выполняется', 'Завершён', 'Исследование ситуации', 'Закрыт'].map(
-            (v) => ({value: v, content: v}),
-          )}
-          onUpdate={([v]) => setStatus(v)}
-        />
-        <TextInput
-          label="Срок решения (МСК)"
-          placeholder="ГГГГ-ММ-ДД ЧЧ:ММ"
-          value={deadline}
-          onUpdate={(v) => {
-            setDeadline(v)
-            setDateChanged(true)
-          }}
+      <div className="incident-fields official-edit-fields">
+        <div className="mcc-field">
+          <label htmlFor="itsm-team">Группа назначения</label>
+          <TextInput id="itsm-team" value={team} onUpdate={setTeam} />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="itsm-employee">Исполнитель</label>
+          <TextInput id="itsm-employee" value={employee} onUpdate={setEmployee} />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="itsm-priority">Приоритет</label>
+          <Select id="itsm-priority" width="max"
+            value={[priority]}
+            options={priorityNames.map((content, i) => ({value: String(i + 1), content}))}
+            onUpdate={([v]) => setPriority(v)}
+          />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="itsm-status">Статус</label>
+          <Select id="itsm-status" width="max"
+            value={[status]}
+            options={['Назначен', 'В работе', 'Выполняется', 'Завершён', 'Исследование ситуации', 'Закрыт'].map(
+              (v) => ({value: v, content: v}),
+            )}
+            onUpdate={([v]) => setStatus(v)}
+          />
+        </div>
+        <div className="mcc-field">
+          <label htmlFor="itsm-deadline">Срок решения (МСК)</label>
+          <TextInput id="itsm-deadline"
+            placeholder="ГГГГ-ММ-ДД ЧЧ:ММ"
+            value={deadline}
+            onUpdate={(v) => {
+              setDeadline(v)
+              setDateChanged(true)
+            }}
+          />
+        </div>
+      </div>
+      <div className="mcc-field">
+        <label htmlFor="itsm-solution">Описание решения</label>
+        <TextArea id="itsm-solution" rows={3}
+          value={solution}
+          onUpdate={setSolution}
         />
       </div>
-      <TextArea
-        value={solution}
-        onUpdate={setSolution}
-        placeholder="Описание решения"
-        controlProps={{'aria-label': 'Описание решения'}}
-      />
       <Flex gap="spacing-2" wrap>
         <Button
           view="action"

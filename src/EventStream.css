@@ -56,7 +56,7 @@
 .shift-stream--full .shift-stream-change { grid-area: change; }
 .shift-stream--full .shift-stream-id { grid-area: code; }
 .shift-stream--full .shift-stream-time { grid-area: time; }
-.shift-stream--full .shift-stream-pagination { overflow-x: auto; }
+.journal-page-controls { min-width: 0; max-width: 100%; flex-wrap: wrap; justify-content: center; row-gap: var(--g-spacing-2); }
 @media(max-width: 48rem) {
   .shift-stream--full .shift-stream-entry {
     grid-template-columns: var(--g-spacing-6) minmax(0, 1fr) auto;
