@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react'
 import {Button, Drawer, Flex, Label, Loader, Text} from '@gravity-ui/uikit'
 import {ApiError} from '../../../shared/api/http'
+import {externalHttpAddress} from '../../../desk/types'
 import {incidentsApi} from '../api/client'
 import {displayState} from '../model/toDesk'
 import type {IncidentDetailResponse} from '../../../entities/incident/model/api-types'
@@ -48,7 +49,10 @@ export function IncidentApiRoute({number}: {number: string}) {
 
     void incidentsApi
       .getIncident(number, controller.signal)
-      .then((detail) => setState({status: 'ready', detail}))
+      .then((detail) => {
+        if (detail.incident.id !== number) throw Error('Ответ ITSM относится к другому инциденту.')
+        if (!controller.signal.aborted) setState({status: 'ready', detail})
+      })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
         const message =
@@ -63,6 +67,8 @@ export function IncidentApiRoute({number}: {number: string}) {
     return () => controller.abort()
   }, [attempt, number])
 
+  const itsm = state.status === 'ready' ? externalHttpAddress(state.detail.itsmUrl) : null
+  const meeting = state.status === 'ready' ? externalHttpAddress(state.detail.meetingUrl) : null
   return (
     <main className="workspace api-incident-route">
       <Text as="h1" variant="header-2">
@@ -149,11 +155,11 @@ export function IncidentApiRoute({number}: {number: string}) {
                 <Text variant="body-1">{state.detail.incident.description}</Text>
               )}
               <Flex gap="spacing-2" wrap>
-                <Button view="action" href={state.detail.itsmUrl} target="_blank" rel="noopener noreferrer">
+                {itsm && <Button view="action" href={itsm} target="_blank" rel="noopener noreferrer">
                   Детальнее в ITSM
-                </Button>
-                {state.detail.meetingUrl && (
-                  <Button view="outlined" href={state.detail.meetingUrl} target="_blank" rel="noopener noreferrer">
+                </Button>}
+                {meeting && (
+                  <Button view="outlined" href={meeting} target="_blank" rel="noopener noreferrer">
                     Аварийная комната
                   </Button>
                 )}

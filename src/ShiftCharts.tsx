@@ -3,6 +3,7 @@ import {Chart, type ChartData} from '@gravity-ui/charts'
 import {Button, Card, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
 import type {Incident} from './demoData'
 import {useWorkspace} from './desk/context'
+import {followOverviewAnchor} from './desk/queueNavigation'
 import {moscowTime, standNow} from './desk/types'
 import {deadlineDistribution, incidentTrend, type TrendPeriod} from './shiftMetrics'
 import './ShiftCharts.css'
@@ -12,7 +13,7 @@ const series = [
   {field: 'restored', name: 'Восстановлено', color: 'var(--g-color-text-positive)'},
 ] as const
 
-export function ShiftCharts({incidents, critical}: {incidents: Incident[]; critical: Incident[]}) {
+export function ShiftCharts({incidents, critical, soonHref}: {incidents: Incident[]; critical: Incident[]; soonHref: string}) {
   const {desk, now} = useWorkspace()
   const epoch = Math.floor(standNow(desk, now) / 60000) * 60000
   const snapshotTime = moscowTime(epoch)
@@ -36,7 +37,7 @@ export function ShiftCharts({incidents, critical}: {incidents: Incident[]; criti
     }
   }, [trend])
 
-  return <div className="shift-charts">
+  return <div className="shift-charts" data-overview-block="charts">
     <Card view="outlined" className="mcc-glass shift-chart">
       <div className="shift-chart-heading">
         <Text as="h2" variant="header-1">Динамика инцидентов</Text>
@@ -71,7 +72,7 @@ export function ShiftCharts({incidents, critical}: {incidents: Incident[]; criti
             </span><span>{bin.value.toLocaleString('ru-RU')}</span></dd>
           </div>)}
         </dl>
-        <Button href="#queue/critical?sla=soon" view="flat-secondary" size="s" className="deadline-queue-link">Инциденты со сроком до 30 мин →</Button>
+        <Button href={soonHref} onClick={e=>followOverviewAnchor(e, 'critical')} view="flat-secondary" size="s" className="deadline-queue-link">Инциденты со сроком до 30 мин →</Button>
       </div>
     </Card>
   </div>

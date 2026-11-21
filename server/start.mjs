@@ -1,6 +1,7 @@
 import {createServer, request as requestHttp} from 'node:http'
 import {request as requestHttps} from 'node:https'
 import serve from 'serve-handler'
+import {liveWorkspaceService} from '../mock/server.ts'
 
 const backend = new URL(process.env.BACKEND_URL ?? '')
 if (!['http:', 'https:'].includes(backend.protocol) || backend.username || backend.password ||
@@ -54,9 +55,14 @@ function proxy(origin, path, incoming, outgoing, headers = forwardedHeaders(inco
   incoming.pipe(upstream)
 }
 
+const workspace = liveWorkspaceService(backend.origin)
 const server = createServer((incoming, outgoing) => {
   const path = incoming.url ?? '/'
   const pathname = path.split('?', 1)[0]
+  if (pathname.startsWith('/api/workspace/')) {
+    void workspace.handle(incoming, outgoing, () => outgoing.writeHead(404).end())
+    return
+  }
   const keycloakPath = keycloakPrefix && pathname.startsWith(keycloakPrefix + '/')
     ? pathname.slice(keycloakPrefix.length) : ''
   if (keycloak && authority && /^\/(?:realms|resources|admin)(?:\/|$)/.test(keycloakPath)) {
@@ -89,5 +95,5 @@ const server = createServer((incoming, outgoing) => {
   proxy(backend, path, incoming, outgoing)
 })
 
-server.listen(Number(process.env.PORT || 3000), '0.0.0.0')
-process.on('SIGTERM', () => server.close())
+server.listen(Number(process.env.PORT || 3000), process.env.MCC_BIND_HOST || '0.0.0.0')
+process.on('SIGTERM', () => server.close(() => workspace.close()))

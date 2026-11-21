@@ -22,6 +22,8 @@ jobs:
       FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8080' }}
       BACKEND_URL: ${{ vars.FRONTEND_BACKEND_URL || 'http://backend:8080' }}
       OIDC_AUTHORITY: ${{ vars.FRONTEND_OIDC_AUTHORITY }}
+      MCC_GROUP_MODEL: ${{ vars.MCC_GROUP_MODEL }}
+      MCC_OLLAMA_URL: ${{ vars.MCC_OLLAMA_URL }}
       COMPOSE_FILE: compose.yaml:compose.pi.yaml
     defaults:
       run:

@@ -12,7 +12,7 @@
 ## Команды
 
 ```sh
-npm run dev      # Vite, http://localhost:5173
+npm run dev      # Vite, http://localhost:5187
 npm run lint     # oxlint
 npm run build    # tsc -b && vite build
 npm run preview  # предпросмотр сборки

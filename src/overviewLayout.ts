@@ -15,6 +15,7 @@ export const overviewBlockTitles: Record<OverviewBlockId, string> = {
 
 export const defaultOverviewOrder: readonly OverviewBlockId[] = overviewBlocks.map(block => block.id)
 export const overviewOrderStorageKey = 'mcc-overview-order'
+const hiddenStorageKey = 'mcc-overview-hidden'
 
 type OverviewOrderStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -84,4 +85,22 @@ export function saveOverviewOrder(
     // Storage can be unavailable in private previews; the in-memory order still works.
   }
   return normalized
+}
+
+export function readHiddenOverviewBlocks(storage: OverviewOrderStorage | null = browserStorage()): OverviewBlockId[] {
+  try {
+    const ids: unknown = JSON.parse(storage?.getItem(hiddenStorageKey) ?? '[]')
+    return Array.isArray(ids) ? defaultOverviewOrder.filter(id => ids.includes(id)) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveHiddenOverviewBlocks(ids: readonly OverviewBlockId[], storage: OverviewOrderStorage | null = browserStorage()) {
+  try {
+    if (ids.length) storage?.setItem(hiddenStorageKey, JSON.stringify(ids))
+    else storage?.removeItem(hiddenStorageKey)
+  } catch {
+    // The current view still works when browser storage is unavailable.
+  }
 }

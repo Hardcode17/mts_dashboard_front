@@ -24,6 +24,15 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY mock ./mock
+COPY src/*.ts ./src/
+COPY src/desk/*.ts ./src/desk/
+COPY src/monitoring/summary.ts ./src/monitoring/
+COPY src/features/incidents/api/client.ts ./src/features/incidents/api/
+COPY src/features/incidents/model/toDesk.ts ./src/features/incidents/model/
+COPY src/shared/api/*.ts ./src/shared/api/
+RUN mkdir -p /var/lib/mcc && chown node:node /var/lib/mcc
+ENV MCC_STATE_DIR=/var/lib/mcc
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

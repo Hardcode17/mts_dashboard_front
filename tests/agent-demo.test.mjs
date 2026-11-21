@@ -25,6 +25,6 @@ test('auth uses its own logs; other cards do not inherit another incident’s di
     assert.equal(partial.hypothesis, null)
     assert.equal(partial.evidence.length, 1)
     assert.ok(partial.evidence[0].record.includes(incident.id))
-    assert.equal(partial.recipient, incident.team)
+    assert.equal(partial.recipient, 'Технический адресат не подтверждён')
   }
 })

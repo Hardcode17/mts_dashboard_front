@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
-import {defineConfig, loadEnv, type ProxyOptions} from 'vite'
-import {mockService} from './mock/server.ts'
+import {defineConfig, loadEnv, type ProxyOptions, type ViteDevServer, type PreviewServer} from 'vite'
+import {liveWorkspaceService, mockService} from './mock/server.ts'
 
 function loopbackOrigin(value: string | undefined) {
   if (!value) return undefined
@@ -33,23 +33,25 @@ export default defineConfig(({mode}) => {
     }
   }
 
+  function connectWorkspace(server: ViteDevServer | PreviewServer) {
+    const live = Boolean(apiUrl) || env.VITE_BACKEND_MODE === 'real'
+    const origin = apiUrl || process.env.BACKEND_URL
+    if (live && !origin) return
+    const service = live ? liveWorkspaceService(origin!) : mockService()
+    server.middlewares.use((req, res, next) => {
+      if (live && !req.url?.startsWith('/api/workspace/')) return next()
+      void service.handle(req, res, next)
+    })
+    server.httpServer?.once('close', () => service.close())
+  }
+
   return {
-    server: {proxy: Object.keys(proxy).length ? proxy : undefined},
-    preview: {proxy: Object.keys(proxy).length ? proxy : undefined},
+    server: {port: 5187, strictPort: true, proxy},
+    preview: {port: 5187, strictPort: true, proxy},
     plugins: [react(), {
-      name: 'mcc-local-stand',
-      configureServer(server) {
-        if (apiUrl || env.VITE_BACKEND_MODE === 'real') return
-        const mock = mockService()
-        server.middlewares.use(mock.handle)
-        server.httpServer?.once('close', () => mock.close())
-      },
-      configurePreviewServer(server) {
-        if (apiUrl || env.VITE_BACKEND_MODE === 'real') return
-        const mock = mockService()
-        server.middlewares.use(mock.handle)
-        server.httpServer.once('close', () => mock.close())
-      },
+      name: 'mcc-workspace',
+      configureServer: connectWorkspace,
+      configurePreviewServer: connectWorkspace,
     }],
   }
 })

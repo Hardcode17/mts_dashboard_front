@@ -6,6 +6,9 @@
 |---|---|
 | Список инцидентов и счётчики групп | `GET /api/dashboard/incidents` |
 | Карточка по номеру INC | `GET /api/dashboard/incidents/{incidentId}` |
+| Поиск похожих INC | `GET /api/dashboard/incidents/{incidentId}/similar` |
+| Справочник исполнителей ITSM | `GET /api/dashboard/users` |
+| Сохранение назначения или статуса в ITSM | `PATCH /api/dashboard/incidents/{incidentId}` |
 | Состояние опубликованного снимка | `GET /api/snapshot/status` |
 | Текущий координатор | `GET /api/me` |
 | Готовность бэкенда | `GET /health` |
@@ -21,3 +24,6 @@
 
 - `GET /api/dashboard/monitoring/summary` возвращает текущие счётчики и историю публикаций. Экран открывается по `/?mode=monitor`.
 - `GET /api/incidents/{id}/relationships` возвращает прямые родительские связи для карточки. Оба маршрута используют обычный JWT координатора.
+
+
+Рабочее место обращается к `GET /api/workspace/snapshot` и `POST /api/workspace/action` с пользовательским Bearer. Сервер получает личность из Spring по `/api/me`, сверяет страницы опубликованного снимка и сохраняет историю смены в SQLite. Форма редактирования отправляет `PATCH /api/workspace/itsm`. Сервер передаёт изменение и тот же Bearer в Spring и возвращает подтверждённую карточку. Видеостена и рабочее место видят одного владельца аварии.

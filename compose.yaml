@@ -10,4 +10,12 @@ services:
       - "${FRONTEND_PORT:-8080}:3000"
     environment:
       BACKEND_URL: ${BACKEND_URL:?Set the backend origin accessible from the container}
+      MCC_STATE_DIR: /var/lib/mcc
+      MCC_GROUP_MODEL: ${MCC_GROUP_MODEL:-}
+      MCC_OLLAMA_URL: ${MCC_OLLAMA_URL:-http://127.0.0.1:11434}
+    volumes:
+      - workspace-data:/var/lib/mcc
     restart: unless-stopped
+
+volumes:
+  workspace-data:

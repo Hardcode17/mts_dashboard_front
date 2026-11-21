@@ -3,6 +3,14 @@ import type {IncidentGroup} from './entities/incident/model/api-types.ts'
 import {usesRealBackend} from './shared/api/mode.ts'
 
 export interface Incident {
+  sysId?: string
+  assigneeLogin?: string
+  meetingUrl?: string | null
+  itsmUrl?: string | null
+  itsmDemo?: boolean
+  parentId?: string | null
+  upstreamService?: string
+  errorCode?: string
   key: string
   id: string
   title: string

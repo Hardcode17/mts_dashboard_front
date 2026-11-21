@@ -5,13 +5,15 @@ import {createServer} from 'node:http'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {mockService} from '../mock/server.ts'
+import {identityFixture} from './support/identity.mjs'
 import {createIncidentsApi} from '../src/features/incidents/api/client.ts'
 import {toApiDesk} from '../src/features/incidents/model/toDesk.ts'
 import {ApiError} from '../src/shared/api/http.ts'
 
-test('the MCC client reads list, detail, and snapshot status from the mock contract', async () => {
+test('the MCC client reads list, detail, and snapshot status from the mock contract', async (t) => {
+  const identity = await identityFixture(t)
   const directory = await mkdtemp(join(tmpdir(), 'mcc-contract-api-'))
-  const mock = mockService(directory)
+  const mock = mockService(directory, undefined, {}, identity.settings)
   const server = createServer((request, response) =>
     mock.handle(request, response, () => {
       response.writeHead(404)
@@ -21,7 +23,7 @@ test('the MCC client reads list, detail, and snapshot status from the mock contr
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
-  const api = createIncidentsApi({baseUrl: origin})
+  const api = createIncidentsApi({baseUrl: origin, getAccessToken: identity.getAccessToken})
 
   try {
     const [page, status] = await Promise.all([
@@ -65,6 +67,25 @@ test('the MCC client reads list, detail, and snapshot status from the mock contr
     mock.close()
     await rm(directory, {recursive: true, force: true})
   }
+})
+
+test('the card reads comparable incidents from the authenticated Spring endpoint', async (t) => {
+  const number = 'INC000021940033'
+  const result = {incidentId: number, revision: 8, eventSeq: 18, candidates: [
+    {incidentId: 'INC000021938167', header: 'Сбой подтверждения', score: 80, reasons: ['Совпадает сервис']},
+  ]}
+  const server = createServer((req, res) => {
+    assert.equal(req.url, '/api/dashboard/incidents/' + number + '/similar')
+    assert.equal(req.method, 'GET')
+    if (req.headers.authorization !== 'Bearer fixture') {res.writeHead(401).end(); return}
+    res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify(result))
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise(resolve => server.close(resolve)))
+  const baseUrl = 'http://127.0.0.1:' + server.address().port
+  await assert.rejects(createIncidentsApi({baseUrl}).getSimilar(number), error => error.status === 401)
+  const api = createIncidentsApi({baseUrl, getAccessToken: () => 'fixture'})
+  assert.deepEqual(await api.getSimilar(number), result)
 })
 
 test('the canonical client follows cursors and revalidates the first page with its ETag', async (t) => {

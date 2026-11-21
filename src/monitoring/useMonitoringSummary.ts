@@ -36,10 +36,11 @@ function responseError(status: number): Error {
   return new Error(`Мониторинг недоступен (HTTP ${status})`)
 }
 
-export function useMonitoringSummary(): MonitoringState {
+export function useMonitoringSummary(enabled = true): MonitoringState {
   const [state, setState] = useState<MonitoringState>(initialState)
 
   useEffect(() => {
+    if (!enabled) return
     let disposed = false
     let timer = 0
     let request: AbortController | null = null
@@ -129,7 +130,7 @@ export function useMonitoringSummary(): MonitoringState {
       window.removeEventListener('focus', wake)
       window.removeEventListener('pageshow', onPageShow)
     }
-  }, [])
+  }, [enabled])
 
   return state
 }

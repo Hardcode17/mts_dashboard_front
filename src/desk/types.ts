@@ -1,4 +1,5 @@
 import type {Incident, ShiftEvent} from '../demoData.ts'
+import type {OutageGroup, GroupReview, GroupDecisions} from './outageGroups.ts'
 import type {CardRevision} from '../incidentHistory.ts'
 
 export const channels = [
@@ -24,6 +25,29 @@ export const states = [
   'Исследование ситуации',
   'Закрыт',
 ] as const
+/**
+ * Официальные статусы контракта ITSM (KAN-57/KAN-58). Демосмена дополнительно
+ * использует «В работе», которого нет в контракте, поэтому соответствие
+ * берётся только по явной таблице, без угадывания.
+ */
+export type ItsmState = 'Assigned' | 'WorkInProgress' | 'Resolved' | 'Closed' | 'Research'
+export const itsmStateLabels: Record<ItsmState, string> = {
+  Assigned: 'Назначен',
+  WorkInProgress: 'Выполняется',
+  Resolved: 'Завершён',
+  Closed: 'Закрыт',
+  Research: 'Исследование ситуации',
+}
+const itsmStateEnums = Object.keys(itsmStateLabels) as ItsmState[]
+export function itsmEnumForState(state: string): ItsmState | undefined {
+  return itsmStateEnums.find((value) => itsmStateLabels[value] === state)
+}
+export interface DirectoryUser {
+  sysId: string
+  login: string
+  name: string
+  groupName: string
+}
 export interface Person {
   id: string
   name: string
@@ -111,8 +135,33 @@ export interface CardWork {
   modelOffline?: boolean
   availability?: 'ready' | 'wait' | 'unknown'
   recommendation?: string
+  recommendedTeam?: string | null
 }
+export const queueKeys = ['critical', 'assigned', 'high', 'research'] as const
+export type QueueKey = typeof queueKeys[number]
+export interface QueueMovement {
+  id: string
+  key: string
+  queue: QueueKey
+  at: number
+  entered: boolean
+  reason: string
+}
+export const queueWindowMs = 60_000
+
+export function belongsToQueue(i: Incident | undefined, queue: QueueKey) {
+  if (!i || i.absent) return false
+  if (i.groups) return i.groups.includes(queue === 'assigned' ? 'coordinators' : queue)
+  switch (queue) {
+    case 'critical': return active(i) && i.priority === 4
+    case 'assigned': return onCoordinators(i)
+    case 'high': return active(i) && i.priority === 3
+    case 'research': return i.research
+  }
+}
+
 export interface Desk {
+  monitorHistory?: import('../monitoring/summary.ts').MonitoringTimelinePoint[]
   mode: Source
   version: number
   started: number
@@ -122,6 +171,10 @@ export interface Desk {
   sourceError: string
   fileDigest?: string
   revisions: Record<string, CardRevision[]>
+  outageGroups?: OutageGroup[]
+  outageDecisions?: Record<string, GroupDecisions>
+  outageProposals?: GroupReview[]
+  movements?: QueueMovement[]
   events: ShiftEvent[]
   signals: Signal[]
   quietUntil: number
@@ -176,6 +229,9 @@ export type Command = {
     | 'wifi'
     | 'advisor'
     | 'roomMember'
+    | 'groupClaim'
+    | 'groupAdd'
+    | 'groupExclude'
   key?: string
   person?: string
   text?: string
@@ -196,7 +252,23 @@ export type Command = {
 export function active(i: Incident) {
   return !i.research && !i.restoredAt && !['Завершён', 'Завершен', 'Закрыт'].includes(i.state)
 }
+export function technicalTeam(name?: string) {
+  const trimmed = name?.trim() ?? ''
+  return trimmed === coordinatorGroup || trimmed === 'Координаторы МИ' ? '' : trimmed
+}
+
+// Older decisions stored the team and an optional free-text comment in the same line.
+export function approvedTeam(work?: CardWork, knownTeam = '') {
+  if (work?.recommendedTeam !== undefined) return technicalTeam(work.recommendedTeam ?? '')
+  const previous = work?.recommendation?.match(/^(?:Принято|Уточнено): (.+)$/u)?.[1]
+  if (!previous) return ''
+  if (knownTeam && (previous === knownTeam || previous.startsWith(knownTeam + ' · '))) return technicalTeam(knownTeam)
+  return previous.includes(' · ') ? '' : technicalTeam(previous)
+}
+
 export function onCoordinators(i: Incident) {
+  if (i.absent) return false
+  if (i.groups) return i.groups.includes('coordinators')
   return (active(i) || i.research) && (i.team === coordinatorGroup || i.team === 'Координаторы МИ')
 }
 export const moscowTime = (date: number) => new Date(date + 3 * 3600_000).toISOString().slice(11, 16)
@@ -208,6 +280,15 @@ export const fullTime = (date: number) =>
   }).format(date)
 export function standNow(d: Pick<Desk, 'mode' | 'started'>, now: number) {
   return d.mode === 'case' ? now : Date.UTC(2026, 10, 21, 9, 42) + now - d.started
+}
+export function externalHttpAddress(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value.trim())) return null
+  try {
+    const url = new URL(value)
+    return url.username || url.password ? null : url.href
+  } catch {
+    return null
+  }
 }
 export function dueInstant(i: Incident) {
   return i.dueAt !== undefined ? i.dueAt : i.due ? Date.parse('2026-11-21T' + i.due + ':00+03:00') : null

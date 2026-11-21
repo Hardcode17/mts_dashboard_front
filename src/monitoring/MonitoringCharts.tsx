@@ -15,6 +15,7 @@ import {
 } from 'chart.js'
 import {Card, Text, useViewportSize} from '@gravity-ui/uikit'
 import type {MonitoringCoordinatorLoad, MonitoringPriority, MonitoringSummary, MonitoringTimelinePoint} from './summary.ts'
+import {usesRealBackend} from '../shared/api/mode'
 
 Chart.register(
   LineController,
@@ -365,12 +366,12 @@ function CoordinatorChart({load, theme, reducedMotion, fontSize}: {
 
   return <>
     <div className="monitor-chart-plot">
-      <canvas ref={canvas} role="img" aria-label={`Нагрузка на координаторов, человек: ${rows.length}`} />
+      <canvas ref={canvas} role="img" aria-label={`Нагрузка по координаторам, строк: ${rows.length}`} />
     </div>
     <div className="monitor-sr">
       <table>
         <caption>Нагрузка на координаторов</caption>
-        <thead><tr><th>Координатор</th><th>Инцидентов</th></tr></thead>
+        <thead><tr><th>Координатор</th><th>{usesRealBackend ? 'Инцидентов' : 'Аварий'}</th></tr></thead>
         <tbody>{load.map((item, index) => <tr key={item.name + '-' + index}><th scope="row">{item.name}</th><td>{item.count}</td></tr>)}</tbody>
       </table>
     </div>
@@ -386,13 +387,13 @@ export function MonitoringCharts({summary, theme, reducedMotion}: {
   const fontSize = chartFontSize(width)
   const doughnutLegend = width !== undefined && width >= 1200 ? 'right' : 'bottom'
   const timelineDescription = summary.timeline.length
-    ? `Последние ${summary.timeline.length} наблюдений · категории могут пересекаться`
+    ? `Замеров за сутки: ${summary.timeline.length} · очереди могут пересекаться`
     : 'Наблюдений за 24 часа нет'
   const priorityTotal = summary.priorities.reduce((total, item) => total + item.count, 0)
   const coordinatorTotal = summary.coordinatorLoad.length
   const coordinatorDescription = coordinatorTotal > MAX_COORDINATOR_BARS
     ? `Показаны ${MAX_COORDINATOR_BARS} из ${coordinatorTotal} по нагрузке`
-    : 'Активные инциденты на координаторах'
+    : usesRealBackend ? 'Активные инциденты на координаторах' : 'Аварии по принявшему координатору'
 
   return <div className="monitor-charts">
     <ChartCard title="Динамика за 24 часа" description={timelineDescription} className="monitor-chart-wide">
