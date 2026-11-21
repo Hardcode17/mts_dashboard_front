@@ -1,5 +1,4 @@
-import type {Incident} from '../src/demoData.ts'
-import {belongsToQueue, standNow, type Desk} from '../src/desk/types.ts'
+import {belongsToQueue, standNow, type Desk, type Incident} from '../src/desk/types.ts'
 
 const step = 5 * 60_000
 export function sampleMonitorHistory(d: Desk, cards: () => Incident[], now: number) {

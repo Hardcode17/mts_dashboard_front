@@ -1,5 +1,5 @@
 import type {IncomingHttpHeaders} from 'node:http'
-import type {Incident} from '../src/demoData.ts'
+import type {Incident} from '../src/desk/types.ts'
 import {parseSnapshot} from './snapshot.ts'
 
 export class ItsmError extends Error {

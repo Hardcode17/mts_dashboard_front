@@ -1,5 +1,5 @@
 import {Text} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace} from './context'
 import {incidentDeadline} from './deadline'
 import {active, moscowTime, standNow} from './types'

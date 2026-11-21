@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData.ts'
+import type {Incident} from './types.ts'
 import {active, dueInstant, moscowTime} from './types.ts'
 
 function duration(minutes: number) {

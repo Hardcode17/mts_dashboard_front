@@ -1,6 +1,58 @@
-import type {Incident, ShiftEvent} from '../demoData.ts'
 import type {OutageGroup, GroupReview, GroupDecisions} from './outageGroups.ts'
+import type {DeadlineRisk} from '../deadlineRisk.ts'
 import type {CardRevision} from '../incidentHistory.ts'
+import type {IncidentGroup} from '../entities/incident/model/api-types.ts'
+
+export interface Incident {
+  sysId?: string
+  assigneeLogin?: string
+  meetingUrl?: string | null
+  itsmUrl?: string | null
+  itsmDemo?: boolean
+  parentId?: string | null
+  upstreamService?: string
+  errorCode?: string
+  key: string
+  id: string
+  title: string
+  product: string
+  team: string
+  state: string
+  registered: string
+  due: string | null
+  priority: number
+  research: boolean
+  assignedAt?: string
+  restoredAt?: string
+  assignee?: string
+  solution?: string
+  service?: string
+  serviceType?: string
+  description?: string
+  impact?: string
+  flags?: string[]
+  dueAt?: number | null
+  deadlineStatus?: {remainingSeconds: number; overdue: boolean; observedAt: number}
+  deadlineRisk?: DeadlineRisk
+  site?: string
+  specialists?: number
+  workMinutes?: number
+  restoredEpoch?: number
+  assignedEpoch?: number
+  registeredAt?: number
+  updatedAt?: number
+  absent?: boolean
+  groups?: IncidentGroup[]
+}
+
+export interface ShiftEvent {
+  at?: number
+  id: string
+  key: string
+  time: string
+  kind: 'new' | 'assign' | 'due' | 'restore'
+  change: string
+}
 
 export const channels = [
   'МТС Notifica',
@@ -113,8 +165,17 @@ export interface Room {
   timeline?: {at: number; who: string; text: string}[]
   fragments: {at: string; who: string; text: string}[]
 }
+export const unknownTechnicalRecipient = 'Технический адресат не подтверждён'
+export interface InvestigationAnalysis {
+  evidence: {source: string; finding: string; record: string}[]
+  hypothesis: string | null
+  recipient: string
+  question: string
+  next: string
+  scenario?: 'payment' | 'auth'
+}
 export interface Report {
-  analysis?: ReturnType<typeof import('../agentDemo.ts').analyzeDemoIncident>
+  analysis?: InvestigationAnalysis
   id: string
   at: number
   title: string
@@ -165,6 +226,7 @@ export interface Desk {
   mode: Source
   version: number
   started: number
+  clockBase?: number
   seq: number
   records: Record<string, Incident>
   input: 'file' | 'upload'
@@ -278,8 +340,14 @@ export const fullTime = (date: number) =>
     dateStyle: 'short',
     timeStyle: 'medium',
   }).format(date)
-export function standNow(d: Pick<Desk, 'mode' | 'started'>, now: number) {
-  return d.mode === 'case' ? now : Date.UTC(2026, 10, 21, 9, 42) + now - d.started
+export function standNow(d: Pick<Desk, 'started' | 'clockBase'>, now: number) {
+  return d.clockBase === undefined ? now : d.clockBase + now - d.started
+}
+export function moscowClockInstant(clock: string, reference: number) {
+  const offset = 3 * 3600_000
+  const midnight = Math.floor((reference + offset) / 86400_000) * 86400_000 - offset
+  const [h, m, s = '0'] = clock.split(':')
+  return midnight + (+h * 3600 + +m * 60 + +s) * 1000
 }
 export function externalHttpAddress(value: unknown): string | null {
   if (typeof value !== 'string' || !/^https?:\/\//i.test(value.trim())) return null
@@ -291,7 +359,7 @@ export function externalHttpAddress(value: unknown): string | null {
   }
 }
 export function dueInstant(i: Incident) {
-  return i.dueAt !== undefined ? i.dueAt : i.due ? Date.parse('2026-11-21T' + i.due + ':00+03:00') : null
+  return i.dueAt ?? null
 }
 export function emptyWork(): CardWork {
   return {notes: [], links: [], reports: []}

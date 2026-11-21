@@ -14,7 +14,7 @@ import {
 } from '@gravity-ui/uikit'
 import {useWorkspace} from './context'
 import {channels, fullTime, standNow, type Attempt, type Channel, type Notice} from './types'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 
 export function ChannelPicker({
   value,

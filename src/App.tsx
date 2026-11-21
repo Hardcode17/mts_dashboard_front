@@ -1,10 +1,8 @@
 import {lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react'
 import {Button, Card, Dialog, Flex, Label, Link, Loader, Text} from '@gravity-ui/uikit'
-import {initialEvents, initialIncidents} from './demoData'
 import {correlationIndex,similarIncidents} from './desk/correlation'
 import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
 import {useDesk} from './desk/useDesk'
-import {workspaceIncidents} from './desk/records'
 import {DashboardAccount} from './features/auth/DashboardAuth'
 import {usesRealBackend} from './shared/api/mode'
 import {monitorMode, openMonitor, watchMonitorMode} from './monitoring/mode'
@@ -12,7 +10,7 @@ import {IncidentGroups} from './control-room/IncidentGroups'
 import {QuickCard} from './desk/QuickCard'
 import {ShiftDesk, StandSettings} from './desk/ShiftDesk'
 import {OfficialCard,Meeting} from './desk/CardWork'
-import {fullTime,standNow,moscowTime} from './desk/types'
+import {fullTime,standNow,moscowTime,type Incident} from './desk/types'
 import './desk/desk.css'
 import {Overview} from './Overview'
 import {QueueCounts} from './QueueActivity'
@@ -84,7 +82,7 @@ export default function App(props:ThemeProps){
   const client=useDesk()
   const monitor=useSyncExternalStore(watchMonitorMode, monitorMode)
   const records=client.desk?.records
-  const incidents = useMemo(() => records ? workspaceIncidents(records, usesRealBackend ? 'case' : client.mode) : [], [records, client.mode])
+  const incidents = useMemo(() => records ? Object.values(records) : [], [records])
   if(!client.desk)return <div className={'cr cr-'+props.theme+' ops-console'}><main className="cr-work workspace ops-loading"><Card className="mcc-glass incident-panel"><Text as="h1" variant="header-2">Рабочее место MCC</Text>
     {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button></>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main></div>
   if (client.desk.apiBeforeFirstSuccess) return <main className="workspace"><Card className="mcc-glass incident-panel">
@@ -99,7 +97,7 @@ export default function App(props:ThemeProps){
     {monitor && <Suspense fallback={<div role="status">Загрузка видеостены…</div>}><OutageWall theme={props.theme} incidents={incidents}/></Suspense>}
   </DeskContext.Provider>
 }
-function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {incidents: typeof initialIncidents; suspended:boolean}){
+function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {incidents: Incident[]; suspended:boolean}){
   const {desk,person,checked,now,error,actionError,clearError,refresh,act,busy}=useWorkspace()
   const [displayed,setDisplayed]=useState<SignalBatch[]>([])
   const route = useDashboardLocation(desk.mode)
@@ -126,7 +124,7 @@ function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {inciden
   const [detailMenu,setDetailMenu] = useState(false)
   const [navigationHost,setNavigationHost] = useState<HTMLDivElement|null>(null)
   const index=useMemo(()=>correlationIndex(incidents),[incidents])
-  const events=useMemo(()=>usesRealBackend || desk.mode==='case'?desk.events:[...desk.events,...initialEvents],[desk.events,desk.mode])
+  const events=desk.events
   const selected=incidents.find(i=>i.key===key||i.id===key)
   const showDetails=selected&&isCardRoute(hash)
   const query=new URLSearchParams(hash.split('?')[1])
@@ -157,7 +155,7 @@ function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {inciden
     return()=>clearTimeout(timer)
   },[nextBatches,open,desk.quietUntil,suspended,isStand])
   const latestEvent = desk.events[0]
-  const recent = latestEvent && (latestEvent.at == null || standNow(desk, now) - latestEvent.at < 60000) ? latestEvent : undefined
+  const recent = latestEvent?.at != null && standNow(desk, now) - latestEvent.at < 60000 ? latestEvent : undefined
   const actor=desk.people.find(p=>p.id===person)??desk.people[0]
   const myTask=actor && desk.tasks.find(t=>!t.finished&&t.attempts.at(-1)?.person===actor.id&&!t.attempts.at(-1)?.ended&&!t.attempts.at(-1)?.accepted)
   const [keepSummary,setKeepSummary] = useState(false)

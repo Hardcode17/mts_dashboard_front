@@ -1,6 +1,5 @@
-import {incidentRevisions, type Incident} from '../demoData.ts'
 import {assignmentCycle} from '../desk/assignmentCycle.ts'
-import {dueInstant, type Desk, type Attempt, type Task, type Signal} from '../desk/types.ts'
+import {dueInstant, type Desk, type Attempt, type Task, type Signal, type Incident} from '../desk/types.ts'
 import type {OutageGroup} from '../desk/outageGroups.ts'
 
 export const groupHref = (id: string) => '#attention?group=' + encodeURIComponent(id)
@@ -97,8 +96,7 @@ export function buildAttentionRows(desk: Desk, incidents: readonly Incident[]): 
       const at = dueInstant(i)
       if (at != null && Number.isFinite(at) && (deadline == null || at < deadline)) deadline = at
       priority = Math.max(priority, i.priority)
-      const versions =
-        desk.revisions[i.key] ?? (desk.mode === 'volume' ? incidentRevisions.get(i.key) : undefined)
+      const versions = desk.revisions[i.key]
       if (!cycle && versions) {
         const teams = assignmentCycle(i, versions)
         if (teams) cycle = {item: i, teams}

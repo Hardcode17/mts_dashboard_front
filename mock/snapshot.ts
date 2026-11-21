@@ -1,4 +1,4 @@
-import type {Incident} from '../src/demoData.ts'
+import type {Incident} from '../src/desk/types.ts'
 import {moscowTime, coordinatorGroup, externalHttpAddress} from '../src/desk/types.ts'
 import {itsmStateLabels} from '../src/desk/types.ts'
 import {normalizeDeadlineRisk} from '../src/deadlineRisk.ts'

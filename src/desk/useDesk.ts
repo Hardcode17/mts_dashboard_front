@@ -1,9 +1,8 @@
 import {usesRealBackend} from '../shared/api/mode'
 import {workspaceFetch} from '../auth/session'
 import {useCallback, useEffect, useRef, useState} from 'react'
-import type {Command, Desk, DirectoryUser, Source} from './types'
+import type {Command, Desk, DirectoryUser, Incident, Source} from './types'
 import {confirmedIncident, officialFailure, type OfficialCard, type OfficialChanges} from './official'
-import type {Incident} from '../demoData'
 
 interface Reply {
   desk: Desk | null

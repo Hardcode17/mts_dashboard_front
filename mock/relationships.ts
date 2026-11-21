@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto'
 import {readFileSync} from 'node:fs'
 import type {IncomingMessage, ServerResponse} from 'node:http'
-import {initialIncidents} from '../src/demoData.ts'
+import {initialIncidents} from './fixtures/shift.ts'
 import type {Desk, Source} from '../src/desk/types.ts'
 
 function send(res: ServerResponse, status: number, data: unknown) {

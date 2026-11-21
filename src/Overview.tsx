@@ -1,8 +1,8 @@
-import {createContext, memo, useContext, useEffect, useMemo, useRef, useState, type RefObject} from 'react'
+import {createContext, memo, useContext, useEffect, useMemo, useRef, useState} from 'react'
 import {Button, Card, Flex, Label, Link, Pagination, Progress, Select, Text, TextInput, useViewportSize} from '@gravity-ui/uikit'
 import {Table, useRowVirtualizer, useTable} from '@gravity-ui/table'
 import type {ColumnDef} from '@gravity-ui/table/tanstack'
-import {type Incident, type ShiftEvent} from './demoData'
+import type {Incident, ShiftEvent} from './desk/types'
 import {EventJournal} from './EventStream'
 import {createPortal} from 'react-dom'
 import {LiveOverview} from './control-room/LiveOverview'
@@ -87,7 +87,7 @@ const columns: ColumnDef<Incident>[] = [
   {accessorKey: 'due', size: 110, header: 'Срок решения', cell: ({row}) => <Deadline item={row.original} />},
 ]
 
-const IncidentTable = memo(function IncidentTable({rows, label, scroll}: {rows: Incident[]; label: string; scroll: RefObject<HTMLDivElement | null>}) {
+const IncidentTable = memo(function IncidentTable({rows, label, scroll}: {rows: Incident[]; label: string; scroll: HTMLDivElement | null}) {
   const {width} = useViewportSize()
   const table = useTable({data: rows, columns, getRowId: (item) => item.key})
   const mobile = width !== undefined && width <= 864
@@ -98,7 +98,7 @@ const IncidentTable = memo(function IncidentTable({rows, label, scroll}: {rows: 
     estimateSize: () => 64,
     overscan: 5,
     getItemKey: index => rows[index].key,
-    getScrollElement: () => scroll.current,
+    getScrollElement: () => scroll,
   })
   if (mobile) return (
     <ul className="overview-incident-list" aria-label={label}>
@@ -128,7 +128,8 @@ function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, acti
   params: URLSearchParams; update: UpdateParams; activity?: Activity; live: boolean;
 }) {
   const {desk, now} = useWorkspace()
-  const scroll = useRef<HTMLDivElement>(null)
+  // The virtualizer needs a render after the scroll container is attached.
+  const [scroll, setScroll] = useState<HTMLDivElement | null>(null)
   const reference = standNow(desk, now)
   const [snapshot, setSnapshot] = useState(liveGroup)
   const group = live ? liveGroup : snapshot
@@ -204,7 +205,7 @@ function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, acti
       </div>
       <QueueFilters incidents={incidents} queue={groupKey} params={params} update={update} reset={() => update(clearFilters)} />
       {pageRows.length ? <>
-        <div ref={scroll} className={'overview-table-scroll' + (pageRows.length >= 50 ? ' overview-table-scroll-long' : '')} tabIndex={0} role="region" aria-label="Список инцидентов">
+        <div ref={setScroll} className={'overview-table-scroll' + (pageRows.length >= 50 ? ' overview-table-scroll-long' : '')} tabIndex={0} role="region" aria-label="Список инцидентов">
           <IncidentTable rows={pageRows} label={selected.title} scroll={scroll} />
         </div>
         <div className="overview-table-footer">

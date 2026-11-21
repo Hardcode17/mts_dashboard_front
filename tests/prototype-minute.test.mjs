@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {sceneAt} from '../src/prototype/minute.ts'
+import {sceneAt} from '../mock/prototype/minute.ts'
 
 test('prototype derives critical totals and product counters from the incidents shown at the replay cursor', () => {
   for (let second = 0; second <= 60; second++) {

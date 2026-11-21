@@ -1,9 +1,8 @@
 import {useEffect, useMemo, useState} from 'react'
 import {Button, Card, Flex, Link, Pagination, Select, Text, TextInput} from '@gravity-ui/uikit'
-import {type Incident, type ShiftEvent} from './demoData'
 import './EventStream.css'
 import {useWorkspace} from './desk/context'
-import {standNow} from './desk/types'
+import {standNow, type Incident, type ShiftEvent} from './desk/types'
 import {shiftEventTime} from './desk/timeline'
 
 const eventKinds = {
@@ -33,10 +32,12 @@ function EventRows({
   events,
   byKey,
   focusKey,
+  shiftStart,
 }: {
   events: ShiftEvent[]
   byKey: Map<string, Incident>
   focusKey: string
+  shiftStart: number
 }) {
   return (
     <ol className="shift-stream-list" aria-label="События от новых к старым">
@@ -48,7 +49,7 @@ function EventRows({
             <Text
               className="shift-stream-time"
               as="time"
-              dateTime={new Date(shiftEventTime(event)).toISOString()}
+              dateTime={new Date(shiftEventTime(event, shiftStart)).toISOString()}
               color="secondary"
             >
               {event.time}
@@ -147,6 +148,7 @@ export function EventJournal({
     }
   }, [focusKey])
   const currentMinute = Math.floor(standNow(desk, now) / 60000)
+  const shiftStart = desk.clockBase ?? desk.started
   const [snapshot, setSnapshot] = useState(events)
   const query = params.get('q') ?? ''
   const product = params.get('product') ?? ''
@@ -160,7 +162,7 @@ export function EventJournal({
       if (kind !== 'all' && event.kind !== kind) return false
       if (product && byKey.get(event.key)?.product !== product) return false
       if (period !== 'shift') {
-        const at = shiftEventTime(event)
+        const at = shiftEventTime(event, shiftStart)
         if (at < since || at >= end) return false
       }
       if (!term) return true
@@ -169,7 +171,7 @@ export function EventJournal({
         (value) => value?.toLocaleLowerCase('ru').includes(term),
       )
     })
-  }, [snapshot, byKey, query, product, kind, period, currentMinute])
+  }, [snapshot, byKey, query, product, kind, period, currentMinute, shiftStart])
   const requested = Number(params.get('page'))
   const page = Number.isSafeInteger(requested)
     ? Math.max(1, Math.min(Math.ceil(found.length / pageSize), requested))
@@ -261,7 +263,7 @@ export function EventJournal({
             <span>Продукт и INC</span>
             <span>Событие</span>
           </div>
-          <EventRows events={found.slice(start, start + pageSize)} byKey={byKey} focusKey={focusKey} />
+          <EventRows events={found.slice(start, start + pageSize)} byKey={byKey} focusKey={focusKey} shiftStart={shiftStart} />
           {found.length > pageSize && (
             <nav className="shift-stream-pagination" aria-label="Страницы журнала">
               <Pagination

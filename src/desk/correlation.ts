@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 const words = (value: string) => [...new Set(value.toLocaleLowerCase('ru').match(/[а-яёa-z0-9]{3,}/g) ?? [])]
 const tokens = (i: Incident) => [
   ...words(i.title).map((w) => 't:' + w),

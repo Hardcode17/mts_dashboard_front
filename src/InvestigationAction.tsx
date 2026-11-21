@@ -1,6 +1,6 @@
 import {useState} from 'react'
 import {Button, Text, type ButtonSize, type ButtonView} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
+import type {Incident} from './desk/types'
 import {useWorkspace} from './desk/context'
 import {investigationHref, isInvestigationReport} from './desk/analysisLinks'
 import {usesRealBackend} from './shared/api/mode'

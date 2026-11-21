@@ -1,6 +1,6 @@
 import {Fragment, useMemo, useState, type ReactNode} from 'react'
 import {Button, Card, Checkbox, Flex, Text} from '@gravity-ui/uikit'
-import type {Incident, ShiftEvent} from '../demoData'
+import type {Incident, ShiftEvent} from '../desk/types'
 import type {Activity} from '../desk/queueActivity'
 import {useWorkspace} from '../desk/context'
 import {dueInstant, standNow, moscowTime} from '../desk/types'

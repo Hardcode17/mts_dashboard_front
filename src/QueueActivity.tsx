@@ -1,6 +1,6 @@
 import {useState} from 'react'
 import {Button, Link, Pagination, Text} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
+import type {Incident} from './desk/types'
 import {moscowTime, standNow, type Desk, type QueueKey, type QueueMovement} from './desk/types'
 
 import {queues, latestTransitions, type Activity} from './desk/queueActivity'

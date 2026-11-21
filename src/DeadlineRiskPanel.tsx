@@ -1,7 +1,6 @@
 import {Accordion, Flex, Label, Text} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
 import {normalizeDeadlineRisk, type DeadlineRiskLevel} from './deadlineRisk'
-import {dueInstant, moscowTime} from './desk/types'
+import {dueInstant, moscowTime, type Incident} from './desk/types'
 
 const riskBadges: Record<DeadlineRiskLevel, {text: string; theme: 'success' | 'warning' | 'danger' | 'normal'}> = {
   low: {text: 'Низкий риск', theme: 'success'},

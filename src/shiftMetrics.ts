@@ -1,4 +1,4 @@
-import type {Incident} from './demoData'
+import type {Incident} from './desk/types'
 
 export type TrendPeriod = 'shift' | 'hour'
 

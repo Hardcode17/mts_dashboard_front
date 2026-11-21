@@ -1,6 +1,6 @@
 import {createContext, useContext, useMemo} from 'react'
 import type {DeskClient} from './useDesk'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {similarIncidents} from './correlation'
 import type {Desk} from './types'
 export const DeskContext = createContext<(DeskClient & {desk: Desk}) | null>(null)

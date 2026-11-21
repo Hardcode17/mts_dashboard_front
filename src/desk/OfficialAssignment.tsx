@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from 'react'
 import {Button, Dialog, Flex, Label, Link, Loader, Select, Text, TextArea, TextInput} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace} from './context'
 import {itsmEnumForState, itsmStateLabels, type ItsmState} from './types'
 import type {OfficialChanges} from './official'

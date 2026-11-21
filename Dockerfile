@@ -5,7 +5,7 @@ RUN npm ci
 COPY . .
 ARG VITE_OIDC_AUTHORITY
 ENV VITE_BACKEND_MODE=real
-RUN npm run lint && npm run build
+RUN npm run lint && npm run build && node tests/e2e/assert-live-bundle.mjs
 
 FROM node:24-alpine AS stand-browser
 RUN apk add --no-cache chromium
@@ -24,7 +24,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
-COPY mock ./mock
+COPY mock/*.ts ./mock/
+COPY mock/fixtures/analysis.ts mock/fixtures/shift.ts ./mock/fixtures/
 COPY src/*.ts ./src/
 COPY src/desk/*.ts ./src/desk/
 COPY src/monitoring/summary.ts ./src/monitoring/

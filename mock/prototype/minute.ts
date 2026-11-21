@@ -1,7 +1,7 @@
 // Isolated, repeatable shift for the layout prototype. No actions reach the stand.
-import {initialIncidents, type Incident} from '../demoData.ts'
-import {active, belongsToQueue, queueKeys, type QueueKey} from '../desk/types.ts'
-import {incidentOrder} from '../desk/order.ts'
+import {initialIncidents} from '../fixtures/shift.ts'
+import {active, belongsToQueue, queueKeys, type Incident, type QueueKey} from '../../src/desk/types.ts'
+import {incidentOrder} from '../../src/desk/order.ts'
 
 export const start = Date.parse('2026-11-21T12:57:00+03:00')
 export function clock(sec: number, seconds = true) {
@@ -33,6 +33,7 @@ function make(n: number, priority: number, research = false): Incident {
     team: n % 11 === 0 ? 'Координаторы МИ' : team,
     state: research ? 'Исследование ситуации' : 'В работе',
     registered: clock(-1800 - (n % 60) * 60, false),
+    registeredAt: start - (1800 + (n % 60) * 60) * 1000,
     due: research ? null : clock((dueAt - start) / 1000, false),
     dueAt: research ? null : dueAt,
   }
@@ -53,7 +54,7 @@ for (let n = 0; n < 300; n++) {
   const exit = offset + 0.1 + 9.8 * phase ** (1 / skew)
   const item = make(1000 + n, 4)
   movements.push(
-    {second: enter, kind: 'in', item: {...item, registered: clock(enter, false)}},
+    {second: enter, kind: 'in', item: {...item, registered: clock(enter, false), registeredAt: start + enter * 1000}},
     {
       second: exit,
       kind: 'out',

@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react'
-import type {Incident} from '../../../demoData'
+import type {Incident} from '../../../desk/types'
 import type {IncidentDetailResponse} from '../../../entities/incident/model/api-types'
 import {usesRealBackend} from '../../../shared/api/mode'
 import {incidentsApi} from '../api/client'

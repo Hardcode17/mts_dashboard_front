@@ -1,4 +1,4 @@
-import type {Incident} from '../../../demoData.ts'
+import type {Incident} from '../../../desk/types.ts'
 import type {IncidentDto, IncidentListResponse, SnapshotStatus} from '../../../entities/incident/model/api-types.ts'
 import {emptyWork, type Desk} from '../../../desk/types.ts'
 import {normalizeDeadlineRisk} from '../../../deadlineRisk.ts'

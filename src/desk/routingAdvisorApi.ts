@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {usesRealBackend} from '../shared/api/mode'
 
 const BASE = '/routing-advisor'

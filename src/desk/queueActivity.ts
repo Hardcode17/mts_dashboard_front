@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData.ts'
+import type {Incident} from './types.ts'
 import {belongsToQueue, queueWindowMs, type QueueKey, type QueueMovement} from './types.ts'
 
 export const queues = [

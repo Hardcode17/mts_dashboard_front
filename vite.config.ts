@@ -1,6 +1,9 @@
+import {fileURLToPath} from 'node:url'
 import react from '@vitejs/plugin-react'
 import {defineConfig, loadEnv, type ProxyOptions, type ViteDevServer, type PreviewServer} from 'vite'
-import {liveWorkspaceService, mockService} from './mock/server.ts'
+
+const prototypeId = 'virtual:mcc-local-prototype'
+const disabledPrototype = '\0' + prototypeId
 
 function loopbackOrigin(value: string | undefined) {
   if (!value) return undefined
@@ -19,6 +22,7 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const serverEnv = loadEnv(mode, process.cwd(), 'ROUTING_')
   const apiUrl = env.VITE_API_URL
+  const live = Boolean(apiUrl) || env.VITE_BACKEND_MODE === 'real'
   const advisorUrl = loopbackOrigin(serverEnv.ROUTING_ADVISOR_URL)
   const proxy: Record<string, string | ProxyOptions> = {}
   if (apiUrl) {
@@ -33,10 +37,10 @@ export default defineConfig(({mode}) => {
     }
   }
 
-  function connectWorkspace(server: ViteDevServer | PreviewServer) {
-    const live = Boolean(apiUrl) || env.VITE_BACKEND_MODE === 'real'
+  async function connectWorkspace(server: ViteDevServer | PreviewServer) {
     const origin = apiUrl || process.env.BACKEND_URL
     if (live && !origin) return
+    const {liveWorkspaceService, mockService} = await import('./mock/server.ts')
     const service = live ? liveWorkspaceService(origin!) : mockService()
     server.middlewares.use((req, res, next) => {
       if (live && !req.url?.startsWith('/api/workspace/')) return next()
@@ -49,6 +53,16 @@ export default defineConfig(({mode}) => {
     server: {port: 5187, strictPort: true, proxy},
     preview: {port: 5187, strictPort: true, proxy},
     plugins: [react(), {
+      name: 'mcc-local-prototype',
+      resolveId(id) {
+        if (id !== prototypeId) return
+        // Don't emit even an unreachable fixture chunk in the live build.
+        return live ? disabledPrototype : fileURLToPath(new URL('./mock/prototype/ControlRoom.tsx', import.meta.url))
+      },
+      load(id) {
+        if (id === disabledPrototype) return 'export default function LocalPrototypeDisabled() { return null }'
+      },
+    }, {
       name: 'mcc-workspace',
       configureServer: connectWorkspace,
       configurePreviewServer: connectWorkspace,

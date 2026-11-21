@@ -1,6 +1,6 @@
 import {useMemo} from 'react'
 import {Chart, type ChartData} from '@gravity-ui/charts'
-import type {Incident} from '../demoData'
+import type {Incident} from '../desk/types'
 
 interface Props {
   count: number

@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {Button, Checkbox, Link, Pagination, Select, TextInput} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from '../desk/types'
 import {useWorkspace} from '../desk/context'
 import {active, fullTime, standNow, type Desk} from '../desk/types'
 import {buildAttentionRows, groupHref, serviceCount, type AttentionRow} from './attention'

@@ -1,4 +1,4 @@
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import type {IncidentGroup} from '../entities/incident/model/api-types'
 import {incidentOrder, registrationTime} from './order.ts'
 import {active, onCoordinators} from './types.ts'

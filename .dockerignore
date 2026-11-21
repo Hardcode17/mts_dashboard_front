@@ -1,5 +1,6 @@
 node_modules
 .mcc-stand
+.mcc-workspace
 dist
 .git
 .scaffold

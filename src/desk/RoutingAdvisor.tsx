@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react'
 import {Button, Card, Flex, Label, Link, Loader, Select, Text, TextArea, TextInput} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace} from './context'
 import {usesRealBackend} from '../shared/api/mode'
 import {approvedTeam, technicalTeam} from './types'

@@ -9,6 +9,11 @@ if (!['http:', 'https:'].includes(backend.protocol) || backend.username || backe
   throw new Error('BACKEND_URL must be an HTTP(S) origin')
 }
 
+const itsmMock = process.env.ITSM_MOCK_URL ? new URL(process.env.ITSM_MOCK_URL) : null
+if (itsmMock && (!['http:', 'https:'].includes(itsmMock.protocol) || itsmMock.href !== itsmMock.origin + '/')) {
+  throw new Error('ITSM_MOCK_URL must be an HTTP(S) origin')
+}
+
 const keycloak = process.env.KEYCLOAK_URL ? new URL(process.env.KEYCLOAK_URL) : null
 const authority = keycloak ? new URL(process.env.OIDC_AUTHORITY ?? '') : null
 const keycloakPrefix = authority?.pathname.match(/^(\/(?:auth|keycloak))\/realms\/dashboard$/)?.[1]
@@ -59,6 +64,25 @@ const workspace = liveWorkspaceService(backend.origin)
 const server = createServer((incoming, outgoing) => {
   const path = incoming.url ?? '/'
   const pathname = path.split('?', 1)[0]
+  if (pathname.startsWith('/itsm_incident/')) {
+    if (!itsmMock || incoming.method !== 'GET' || !/^\/itsm_incident\/INC[0-9]+\/page$/.test(path)) {
+      outgoing.writeHead(404).end()
+      return
+    }
+    void fetch(new URL(path, itsmMock), {redirect: 'manual', signal: AbortSignal.timeout(5000)})
+      .then(async page => {
+        if (page.status === 404) { outgoing.writeHead(404).end(); return }
+        if (!page.ok || !/^text\/html(?:;|$)/i.test(page.headers.get('content-type') ?? '')) {
+          upstreamUnavailable(outgoing)
+          return
+        }
+        const html = await page.text()
+        outgoing.writeHead(200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+          'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+          'X-Content-Type-Options': 'nosniff'}).end(html)
+      }).catch(() => upstreamUnavailable(outgoing))
+    return
+  }
   if (pathname.startsWith('/api/workspace/')) {
     void workspace.handle(incoming, outgoing, () => outgoing.writeHead(404).end())
     return
