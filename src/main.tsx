@@ -5,12 +5,13 @@ import '@gravity-ui/uikit/styles/styles.css'
 import './theme/mts-theme.css'
 import './index.css'
 import DashboardRoot from './DashboardRoot'
+import {usesRealBackend} from './shared/api/mode'
 
 configure({lang: 'ru'})
 const cardPath=window.location.pathname.match(/^\/incidents\/([^/]+)\/?$/)
 const params=new URLSearchParams(window.location.search)
 const source=params.get('source')
-if(cardPath&&(source==='case'||source==='volume')){
+if(!usesRealBackend&&cardPath&&(source==='case'||source==='volume')){
   localStorage.setItem('mcc-source',source)
   window.history.replaceState(null,'','/#incident/'+cardPath[1])
 }

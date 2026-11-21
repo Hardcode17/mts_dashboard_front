@@ -48,8 +48,8 @@ function CriticalTile({item}: {item: Incident}) {
         className="overview-tile-link"
       >
         <Flex direction="column" gap="spacing-1">
-          <Text variant="body-1" color="secondary">{item.product}</Text>
-          <Text variant="subheader-3">{item.title}</Text>
+          {item.title && <Text variant="body-1" color="secondary">{item.product}</Text>}
+          <Text variant="subheader-3">{item.title || item.product}</Text>
         </Flex>
         <Flex className="overview-product-value" justifyContent="space-between" alignItems="center" gap="spacing-2" wrap>
           <Flex className="overview-deadline" alignItems="baseline" gap="spacing-2">
@@ -95,7 +95,7 @@ function IncidentNumberLink({item}: {item: Incident}) {
 
 const columns: ColumnDef<Incident>[] = [
   {accessorKey: 'id', size: 132, header: 'Номер', cell: ({row}) => <IncidentNumberLink item={row.original} />},
-  {accessorKey: 'product', size: 345, header: 'Продукт и сбой', cell: ({row}) => <div className="overview-cell"><Text variant="subheader-2">{row.original.product}</Text><Text variant="body-1" className="overview-cell-symptom" title={row.original.title}>{row.original.title}</Text></div>},
+  {accessorKey: 'product', size: 345, header: 'Продукт и сбой', cell: ({row}) => <div className="overview-cell"><Text variant="subheader-2">{row.original.product}</Text>{row.original.title && <Text variant="body-1" className="overview-cell-symptom" title={row.original.title}>{row.original.title}</Text>}</div>},
   {accessorKey: 'team', size: 166, header: 'Назначенная команда'},
   {accessorKey: 'state', size: 150, header: 'Статус', cell: ({row}) => <Label size="s" theme={row.original.research ? 'utility' : row.original.state === 'Назначен' ? 'info' : active(row.original) ? 'normal' : 'success'}>{row.original.state}</Label>},
   {accessorKey: 'registered', size: 136, header: 'Регистрация', cell: ({row}) => <div className="overview-cell"><Text>{row.original.registered}</Text>{row.original.updatedAt&&<Text variant="caption-2" color="secondary">Обновлено {fullTime(row.original.updatedAt)}</Text>}</div>},
@@ -125,7 +125,7 @@ const IncidentTable = memo(function IncidentTable({rows, label, scroll, api}: {
       {rows.map(item => <li key={item.key}>
         <Link view="primary" href={api ? '/incidents/' + encodeURIComponent(item.id) : '#drawer/' + item.key}>
           <Text variant="caption-2" color="secondary">{item.product} · {item.id}</Text>
-          <Text variant="subheader-2">{item.title}</Text>
+          {item.title && <Text variant="subheader-2">{item.title}</Text>}
           <Deadline item={item} />
         </Link>
       </li>)}
@@ -173,7 +173,7 @@ function QueueSection({queue, group, incidents, queryString, update}: QueueSecti
   const threshold = desk.threshold
   const results = useMemo(() => {
     const words = query.trim().toLocaleLowerCase('ru-RU').split(/\s+/).filter(Boolean)
-    return group.filter((item) => {
+    const matched = group.filter((item) => {
       if (soonOnly) {
         const at=dueInstant(item);const left=at===null?null:Math.ceil((at-filterTime)/60000)
         if (left === null || left < 0 || left > 30) return false
@@ -188,9 +188,11 @@ function QueueSection({queue, group, incidents, queryString, update}: QueueSecti
       if (!words.length) return true
       const text = [item.id, item.product, item.title, item.team].join(' ').toLocaleLowerCase('ru-RU')
       return words.every((word) => text.includes(word))
-    }).sort(sort === 'updated' ? recentlyUpdated :
+    })
+    if (mode === 'api' && sort === 'updated') return matched
+    return matched.sort(sort === 'updated' ? recentlyUpdated :
       sort === 'registered' ? (a, b) => registrationTime(b) - registrationTime(a) || a.id.localeCompare(b.id) : incidentOrder)
-  }, [deadline, filterTime, group, params, query, soonOnly, sort, threshold])
+  }, [deadline, filterTime, group, mode, params, query, soonOnly, sort, threshold])
   const lastPage = Math.max(1, Math.ceil(results.length / size))
   const requestedPage = Number(params.get('page'))
   const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(lastPage, requestedPage)) : 1

@@ -51,28 +51,46 @@ npm run preview
 
 Исходники находятся в `src/`, статические файлы — в `public/`, результат сборки — в `dist/`.
 
-## Деплой через Docker
+## Локальная проверка с бэкендом
 
-Требуется запущенный Docker Engine с поддержкой Linux-контейнеров и Docker Compose.
-Из папки проекта:
+Поднимите стенд из `Hardcode17/mts_dashboard_backend` с Keycloak и публикацией
+снимков из ITSM. Затем запустите фронтенд на адресе, разрешённом в настройках
+клиента Keycloak `dashboard-web`.
 
 ```sh
+VITE_API_URL=http://127.0.0.1:8091 \
+VITE_OIDC_AUTHORITY=http://localhost:8084/realms/dashboard \
+npm run dev -- --host localhost --port 3000
+```
+
+В режиме реального API Vite проксирует `/api` и `/health` на указанный бэкенд.
+По адресу http://localhost:3000 войдите под пользователем стендового realm.
+Добавьте в клиент Keycloak origin приложения и callback `/auth/callback`,
+если запускаете фронтенд на другом адресе. Обычный `npm run dev` без этих
+переменных поднимает локальный мок для разработки.
+
+## Деплой через Docker
+
+Укажите адрес бэкенда, доступный из контейнера, и публичный URL realm Keycloak,
+доступный браузеру. Боевой адрес фронтенда должен быть разрешён в
+`dashboard-web` и обслуживаться по HTTPS.
+
+```sh
+BACKEND_URL=http://backend.example.internal:8081 \
+OIDC_AUTHORITY=https://auth.example.org/realms/dashboard \
 docker compose up -d --build
 ```
 
-Приложение: http://localhost:8080. Порт можно изменить переменной `FRONTEND_PORT`
-в окружении или в локальном файле `.env`, например `FRONTEND_PORT=3000`.
+Фронтенд публикуется на порту `FRONTEND_PORT` (по умолчанию `8080`). Контейнер
+раздаёт статику от пользователя `node` и проксирует `/api` и `/health` к
+бэкенду. Проверка готовности обращается к `/health` бэкенда через этот прокси.
 
-Node.js 24 собирает приложение и запускает HTTP-сервер на порту 3000. Он отдаёт статику, обрабатывает маршруты приложения и запросы `/api/stand/`. Compose хранит базу в томе `mcc-stand` и подключает каталог исходной выгрузки для чтения.
-Контейнер работает от непривилегированного пользователя `node`.
-Для запуска сборки без Docker: `npm run build`, затем `npm start` (http://localhost:3000).
+Для запуска сборки без Docker:
 
 ```sh
-docker compose logs -f frontend
-docker compose down
+VITE_BACKEND_MODE=real VITE_OIDC_AUTHORITY=http://localhost:8084/realms/dashboard npm run build
+BACKEND_URL=http://127.0.0.1:8091 npm start
 ```
-
-После изменения исходников снова выполните `docker compose up -d --build`.
 
 ## Автодеплой GitHub Actions
 
@@ -92,8 +110,9 @@ TypeScript, заменяет контейнер и ждёт успешного h
 
 Адрес после деплоя: `http://<IP Raspberry Pi>:8080`.
 Для другого порта задайте переменную репозитория `FRONTEND_PORT` в
-Settings → Secrets and variables → Actions → Variables. Порт должен быть доступен
-в сетевых настройках сервера. SSH и registry secrets для этого способа не нужны.
+Settings → Secrets and variables → Actions → Variables. Там же задайте
+`FRONTEND_BACKEND_URL` и `FRONTEND_OIDC_AUTHORITY`. Порт должен быть доступен
+в сетевых настройках сервера.
 
 Для ручного управления контейнером на runner используйте тот же Compose project:
 

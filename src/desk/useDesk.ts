@@ -1,9 +1,11 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
 import type {Command, Desk, Source} from './types'
 import {workspaceIncidents} from './records'
+import {usesRealBackend} from '../shared/api/mode'
 import {incidentsApi} from '../features/incidents/api/client'
 import {toApiDesk} from '../features/incidents/model/toDesk'
 import {createIncidentFlowTracker, type IncidentFlow} from '../features/incidents/model/incidentFlow'
+import type {IncidentListResponse, SnapshotStatus} from '../entities/incident/model/api-types'
 
 type DataSource = Source | 'api'
 
@@ -31,8 +33,8 @@ function savedSource(): DataSource {
 }
 
 export function useDesk() {
-  const [mode, setMode] = useState<DataSource>(() => linkedSource() ?? savedSource())
-  const [person, setPerson] = useState(() => localStorage.getItem('mcc-person') || 'anna')
+  const [mode, setMode] = useState<DataSource>(() => usesRealBackend ? 'api' : linkedSource() ?? savedSource())
+  const [person, setPerson] = useState(() => usesRealBackend ? '' : localStorage.getItem('mcc-person') || 'anna')
   const [desk, setDesk] = useState<Desk | null>(null)
   const [incidentFlow, setIncidentFlow] = useState<IncidentFlow | null>(null)
   const [now, setNow] = useState(Date.now)
@@ -42,6 +44,7 @@ export function useDesk() {
   const [busy, setBusy] = useState(false)
   const current = useRef<{mode: DataSource; version: number; flowVersion?: number}>({mode, version: -1})
   const flowTracker = useRef<ReturnType<typeof createIncidentFlowTracker> | null>(null)
+  const apiSnapshot = useRef<{incidents: IncidentListResponse; status: SnapshotStatus} | null>(null)
   const clockOffset = useRef(0)
   const accept = useCallback((reply: Reply, source: DataSource) => {
     if (current.current.mode !== source || reply.version < current.current.version) return
@@ -72,17 +75,19 @@ export function useDesk() {
             incidentsApi.getIncidents({}, requestSignal),
             incidentsApi.getSnapshotStatus(requestSignal),
           ])
-          const checked = status.lastSuccessAt
-            ? Date.parse(status.lastSuccessAt)
-            : status.lastReceivedAt
-              ? Date.parse(status.lastReceivedAt)
-              : Date.now()
+          if (signal?.aborted || snapshot !== current.current || incidents.eventSeq < snapshot.version) return
+          const previous = apiSnapshot.current
+          const changed = previous?.incidents !== incidents ||
+            previous.status.stale !== status.stale ||
+            previous.status.lastSuccessAt !== status.lastSuccessAt
+          apiSnapshot.current = {incidents, status}
+          const now = Date.now()
           accept(
             {
-              desk: toApiDesk(incidents, status, Date.now()),
-              version: incidents.revision ?? status.revision ?? 0,
-              checked,
-              now: Date.now(),
+              desk: changed ? toApiDesk(incidents, status, now) : null,
+              version: incidents.eventSeq,
+              checked: now,
+              now,
             },
             snapshot.mode,
           )
@@ -144,10 +149,12 @@ export function useDesk() {
     }
   }
   const selectSource = useCallback((value: DataSource) => {
+    if (usesRealBackend) return
     localStorage.setItem('mcc-source', value)
     if (value === current.current.mode) return
     current.current = {mode: value, version: -1}
     flowTracker.current = null
+    apiSnapshot.current = null
     setIncidentFlow(null)
     setDesk(null)
     setChecked(0)

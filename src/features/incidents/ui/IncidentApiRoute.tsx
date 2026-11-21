@@ -2,6 +2,7 @@ import {useEffect, useState} from 'react'
 import {Button, Drawer, Flex, Label, Loader, Text} from '@gravity-ui/uikit'
 import {ApiError} from '../../../shared/api/http'
 import {incidentsApi} from '../api/client'
+import {displayState} from '../model/toDesk'
 import type {IncidentDetailResponse} from '../../../entities/incident/model/api-types'
 
 type LoadState =
@@ -12,10 +13,20 @@ type LoadState =
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'medium',
   timeStyle: 'short',
+  timeZone: 'Europe/Moscow',
 })
+const relativeFormatter = new Intl.RelativeTimeFormat('ru-RU')
 
-function formatDate(value: string | null): string {
+function formatDate(value?: string | null): string {
   return value ? dateFormatter.format(new Date(value)) : 'Не указан'
+}
+
+function formatDeadline(deadline: string | null, remaining: number | null, overdue: boolean) {
+  const date = formatDate(deadline)
+  if (remaining === null || remaining === 0) return date
+  const seconds = Math.abs(remaining)
+  const amount = seconds < 60 ? seconds : Math.ceil(seconds / 60)
+  return date + ' · ' + relativeFormatter.format(overdue ? -amount : amount, seconds < 60 ? 'second' : 'minute')
 }
 
 function priorityLabel(priorityId: number): string {
@@ -55,9 +66,6 @@ export function IncidentApiRoute({number}: {number: string}) {
     <main className="workspace api-incident-route">
       <Text as="h1" variant="header-2">
         Карточка инцидента
-      </Text>
-      <Text color="secondary" variant="body-1">
-        Загрузка данных из API рабочего места MCC.
       </Text>
       <Drawer
         placement="right"
@@ -108,13 +116,13 @@ export function IncidentApiRoute({number}: {number: string}) {
                 {priorityLabel(state.detail.incident.priorityId)} приоритет
               </Label>
               <Text as="h2" variant="header-2">
-                {state.detail.incident.header}
+                {state.detail.incident.header || state.detail.incident.id}
               </Text>
               <dl className="quick-fields">
                 {[
                   ['Продукт', state.detail.incident.productName ?? 'Не указан'],
                   ['Сервис', state.detail.incident.service ?? 'Не указан'],
-                  ['Статус', state.detail.incident.stateEnum],
+                  ['Статус', displayState(state.detail.incident.stateEnum)],
                   [
                     'Назначенная команда',
                     state.detail.incident.assignedGroupName ?? 'Не назначена',
@@ -123,9 +131,12 @@ export function IncidentApiRoute({number}: {number: string}) {
                     'Исполнитель',
                     state.detail.incident.assignedEmployee ?? 'Не назначен',
                   ],
-                  ['Срок решения', formatDate(state.detail.incident.deadline)],
+                  ['Срок решения', formatDeadline(
+                    state.detail.incident.deadline,
+                    state.detail.incident.remainingSeconds,
+                    state.detail.incident.overdue,
+                  )],
                   ['Регистрация', formatDate(state.detail.incident.submitDate)],
-                  ['Обновлено', formatDate(state.detail.incident.updatedAt)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt>{label}</dt>
@@ -137,11 +148,11 @@ export function IncidentApiRoute({number}: {number: string}) {
                 <Text variant="body-1">{state.detail.incident.description}</Text>
               )}
               <Flex gap="spacing-2" wrap>
-                <Button view="action" href={state.detail.itsmUrl} target="_blank">
+                <Button view="action" href={state.detail.itsmUrl} target="_blank" rel="noopener noreferrer">
                   Детальнее в ITSM
                 </Button>
                 {state.detail.meetingUrl && (
-                  <Button view="outlined" href={state.detail.meetingUrl} target="_blank">
+                  <Button view="outlined" href={state.detail.meetingUrl} target="_blank" rel="noopener noreferrer">
                     Аварийная комната
                   </Button>
                 )}

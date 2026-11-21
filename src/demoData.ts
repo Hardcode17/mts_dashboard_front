@@ -1,5 +1,6 @@
 import type {CardRevision} from './incidentHistory.ts'
 import type {IncidentGroup} from './entities/incident/model/api-types.ts'
+import {usesRealBackend} from './shared/api/mode.ts'
 
 export interface Incident {
   key: string
@@ -167,7 +168,7 @@ function makeShiftSnapshot() {
   return {incidents, events, history}
 }
 
-const shift = makeShiftSnapshot()
+const shift = usesRealBackend ? {incidents: [], events: [], history: new Map()} : makeShiftSnapshot()
 export const initialIncidents = shift.incidents
 export const initialEvents = shift.events
 export const incidentRevisions: ReadonlyMap<string, readonly CardRevision[]> = shift.history

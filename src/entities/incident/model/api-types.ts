@@ -26,10 +26,12 @@ export interface IncidentDto {
   description: string | null
   productName: string | null
   service: string | null
+  serviceType: string | null
   submitDate: string
-  updatedAt: string
+  updatedAt?: string
+  completionDate: string | null
   stateEnum: IncidentState
-  priorityId: PriorityId
+  priorityId: number
   assignedGroupName: string | null
   assignedEmployee: string | null
   deadline: string | null
@@ -104,14 +106,4 @@ export interface SnapshotStatus {
 export interface ApiErrorDto {
   code: string
   message: string
-}
-
-export interface IncidentFilters {
-  group?: IncidentGroup
-  q?: string
-  assignedGroupName?: string
-  productName?: string
-  stateEnum?: IncidentState
-  priorityId?: PriorityId
-  deadlineState?: DeadlineState
 }

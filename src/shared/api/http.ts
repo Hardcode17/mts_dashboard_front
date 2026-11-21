@@ -20,11 +20,11 @@ export interface HttpClientOptions {
 export function createHttpClient(options: HttpClientOptions = {}) {
   const baseUrl = options.baseUrl ?? ''
 
-  return async function request<T>(
+  async function requestResponse(
     path: string,
     init: RequestInit = {},
     signal?: AbortSignal,
-  ): Promise<T> {
+  ): Promise<Response> {
     const headers = new Headers(init.headers)
     const token = options.getAccessToken?.()
 
@@ -38,7 +38,7 @@ export function createHttpClient(options: HttpClientOptions = {}) {
       cache: 'no-store',
     })
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 304) {
       const error = (await response.json().catch(() => null)) as ApiErrorDto | null
       throw new ApiError(
         response.status,
@@ -48,7 +48,14 @@ export function createHttpClient(options: HttpClientOptions = {}) {
       )
     }
 
+    return response
+  }
+
+  async function request<T>(path: string, init: RequestInit = {}, signal?: AbortSignal): Promise<T> {
+    const response = await requestResponse(path, init, signal)
     if (response.status === 204) return undefined as T
     return (await response.json()) as T
   }
+
+  return {request, requestResponse}
 }

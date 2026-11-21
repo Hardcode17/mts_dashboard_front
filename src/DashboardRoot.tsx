@@ -1,6 +1,8 @@
 import {useState} from 'react'
 import {ThemeProvider} from '@gravity-ui/uikit'
 import App from './App'
+import {DashboardAuth} from './features/auth/DashboardAuth'
+import {usesRealBackend} from './shared/api/mode'
 
 export default function DashboardRoot() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -10,5 +12,8 @@ export default function DashboardRoot() {
     setTheme(value)
     try { localStorage.setItem('mcc-theme', value) } catch { /* Storage can be unavailable in local previews. */ }
   }
-  return <ThemeProvider theme={theme}><App theme={theme} changeTheme={changeTheme} /></ThemeProvider>
+  const dashboard = <App theme={theme} changeTheme={changeTheme} />
+  return <ThemeProvider theme={theme}>
+    {usesRealBackend ? <DashboardAuth>{dashboard}</DashboardAuth> : dashboard}
+  </ThemeProvider>
 }

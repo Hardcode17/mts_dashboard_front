@@ -9,13 +9,14 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "start": "node mock/start.mjs",
+    "start": "node server/start.mjs",
     "test:browser": "npm run build && node --test tests/acceptance.browser.mjs"
   },
   "dependencies": {
     "@gravity-ui/charts": "^2.1.0",
     "@gravity-ui/table": "^2.0.0",
     "@gravity-ui/uikit": "^8.1.0",
+    "oidc-client-ts": "^3.5.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "serve-handler": "6.1.7"

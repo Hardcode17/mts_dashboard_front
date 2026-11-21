@@ -14,6 +14,7 @@ import {
   TextInput,
 } from '@gravity-ui/uikit'
 import {useWorkspace} from './context'
+import {usesRealBackend} from '../shared/api/mode'
 import {historyFields} from '../incidentHistory'
 import {fullTime, standNow, type Task} from './types'
 import type {Incident} from '../demoData'
@@ -213,7 +214,7 @@ function SourceDesk() {
         <Text as="h2" variant="header-1">
           Источник карточек
         </Text>
-        <div className="mcc-field">
+        {!usesRealBackend && <div className="mcc-field">
           <label htmlFor="shift-dataset">Набор данных</label>
           <Select id="shift-dataset" width="max" value={[mode]}
             options={[
@@ -223,7 +224,7 @@ function SourceDesk() {
             ]}
             onUpdate={([v]) => source(v === 'case' || v === 'volume' ? v : 'api')}
           />
-        </div>
+        </div>}
         <div className="shift-source-status">
           <Text>{error || desk.sourceError || 'Опрос работает'}</Text>
           <Text color="secondary">Последняя проверка: {checked ? fullTime(checked) : 'ожидаем ответа'}</Text>
@@ -244,7 +245,7 @@ function SourceDesk() {
         {mode === 'api' ? (
           <>
             <Text>
-              Дашборд читает опубликованные инциденты через `GET /api/incidents`
+              Дашборд читает опубликованные инциденты через `GET /api/dashboard/incidents`
               и свежесть снимка через `GET /api/snapshot/status`. Источник только
               для чтения; действия маршрутизации остаются в отдельном демо-режиме.
             </Text>

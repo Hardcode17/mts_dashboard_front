@@ -12,6 +12,8 @@ import {fullTime,standNow,moscowTime} from './desk/types'
 import './desk/desk.css'
 import {Overview} from './Overview'
 import {IncidentApiRoute} from './features/incidents/ui/IncidentApiRoute'
+import {DashboardAccount} from './features/auth/DashboardAuth'
+import {usesRealBackend} from './shared/api/mode'
 import mtsSymbol from './assets/mts-symbol.svg'
 import './App.css'
 
@@ -79,7 +81,7 @@ function DeskApplication(props:ThemeProps){
   const client=useDesk()
   if(!client.desk)return <main className="workspace"><Card className="mcc-glass incident-panel"><Text as="h1" variant="header-2">Рабочее место MCC</Text>
     {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button>
-      {client.mode === 'api' && <Button onClick={() => client.source('volume')}>Большая смена</Button>}</>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
+      {client.mode === 'api' && !usesRealBackend && <Button onClick={() => client.source('volume')}>Большая смена</Button>}</>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
   return <DeskContext.Provider value={{...client,desk:client.desk}}><Workspace key={client.mode} {...props}/></DeskContext.Provider>
 }
 function Workspace({theme,changeTheme}:ThemeProps){
@@ -155,6 +157,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
             <Link href="#events" aria-current={listPath === 'events' && !showDetails ? 'page' : undefined}>Журнал</Link>
           </nav>
           <Flex alignItems="center" gap="spacing-3" className="snapshot">
+            <DashboardAccount />
             <Text className="snapshot-clock" color="secondary" variant="body-1">{moscowTime(standNow(desk,now))} МСК</Text>
             <button
               type="button"
@@ -224,7 +227,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
             </Flex>
           </div>
           <Overview listingHash={listing} incidents={incidents} events={events} wall={wall} summary={summary} activeQueue={activeQueue} />
-          <footer className="overview-footer"><Text color="secondary" variant="caption-2">Демонстрационные данные · время стенда {moscowTime(standNow(desk,now))} МСК</Text>
+          <footer className="overview-footer"><Text color="secondary" variant="caption-2">{mode === 'api' ? 'Опубликованный снимок' : 'Демонстрационные данные'} · {moscowTime(standNow(desk,now))} МСК</Text>
             <Link href="#desk/source">Настроить источник</Link>
           </footer>
         </div>}

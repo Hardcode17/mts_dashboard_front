@@ -10,7 +10,7 @@ function displayTime(value: string): string {
   }).format(new Date(value))
 }
 
-function displayState(state: IncidentDto['stateEnum']): string {
+export function displayState(state: IncidentDto['stateEnum']): string {
   const labels: Record<IncidentDto['stateEnum'], string> = {
     Assigned: 'Назначен',
     WorkInProgress: 'В работе',
@@ -38,7 +38,10 @@ export function toIncident(dto: IncidentDto): Incident {
     state,
     registered: displayTime(dto.submitDate),
     registeredAt,
-    updatedAt: Date.parse(dto.updatedAt),
+    updatedAt: dto.updatedAt ? Date.parse(dto.updatedAt) : undefined,
+    restoredAt: dto.completionDate ? displayTime(dto.completionDate) : undefined,
+    restoredEpoch: dto.completionDate ? Date.parse(dto.completionDate) : undefined,
+    serviceType: dto.serviceType ?? undefined,
     due: dueAt === null ? null : displayTime(dto.deadline!),
     dueAt,
     priority: dto.priorityId,
