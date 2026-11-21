@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {Button, Select, TextInput, Link} from '@gravity-ui/uikit'
+import {Button, Select, TextInput, Link, Text} from '@gravity-ui/uikit'
 import type {Incident} from '../demoData'
 import {useWorkspace} from './context'
 import {priorityNames} from './types'
@@ -20,17 +20,26 @@ const fields = [
   ['serviceType', 'Тип сервиса'],
 ] as const
 
+const sharedPresets = [
+  {title: 'Критические со сроком до 30 минут', href: '#queue/critical?sla=soon'},
+  {title: 'Просроченное на координаторах', href: '#queue/assigned?deadline=late'},
+]
+
 export function QueueFilters({incidents, params, update, queue, reset}: Props) {
   const {desk, act, person} = useWorkspace()
   const [name, setName] = useState('')
   const list = desk.presets[person] ?? []
-  const activeFilters = [...fields.map(([field]) => field), 'deadline'].filter((key) =>
-    params.get(key),
-  ).length
+  const activeFilters = [...fields, ['deadline', 'Срок решения'], ['sla', 'До 30 минут']]
+    .filter(([key]) => params.get(key))
+    .map(([, label]) => label)
+  const presetParams = new URLSearchParams(params)
+  presetParams.delete('page')
+  const presetQuery = presetParams.toString()
+  const presetHref = '#queue/' + queue + (presetQuery ? '?' + presetQuery : '')
   return (
     <details className="queue-filters">
       <summary>
-        Фильтры и сохранённые представления{activeFilters > 0 && ' · применено: ' + activeFilters}
+        Фильтры и сохранённые представления{activeFilters.length > 0 && ' · ' + activeFilters.join(', ')}
       </summary>
       <div className="mcc-disclosure-body">
         <div className="queue-filter-fields">
@@ -73,6 +82,11 @@ export function QueueFilters({incidents, params, update, queue, reset}: Props) {
           Сбросить фильтры
         </Button>
         <div className="queue-presets">
+          <Text as="h3" variant="subheader-2">Готовые представления</Text>
+          <div className="queue-saved-preset">
+            {sharedPresets.map(({title, href}) => <Link key={href} href={href}>{title}</Link>)}
+          </div>
+          <Text as="h3" variant="subheader-2">Мои представления</Text>
           <div className="queue-preset-form">
             <div className="mcc-field">
               <label htmlFor="queue-preset-name">Название представления</label>
@@ -86,7 +100,7 @@ export function QueueFilters({incidents, params, update, queue, reset}: Props) {
                     type: 'preset',
                     person,
                     title: name,
-                    value: '#queue/' + queue + '?' + params.toString(),
+                    value: presetHref,
                   })
                 )
                   setName('')

@@ -243,7 +243,7 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
           <div className="mcc-field">
             <label htmlFor="queue-order">Порядок</label>
             <Select id="queue-order" width="max" size="l" value={[sort]} options={sortOptions}
-              onUpdate={([value]) => update({sort: value === 'deadline' ? '' : value, page:''})} />
+              onUpdate={([value]) => update({sort: value === 'updated' ? '' : value, page:''})} />
           </div>
         </div>
       </div>
