@@ -1,3 +1,5 @@
+import type {CardRevision} from './incidentHistory.ts'
+
 export interface Incident {
   key: string
   id: string
@@ -11,9 +13,26 @@ export interface Incident {
   research: boolean
   assignedAt?: string
   restoredAt?: string
+  assignee?: string
+  solution?: string
+  service?: string
+  serviceType?: string
+  description?: string
+  impact?: string
+  flags?: string[]
+  dueAt?: number | null
+  site?:string
+  specialists?: number
+  workMinutes?:number
+  restoredEpoch?: number
+  assignedEpoch?:number
+  registeredAt?: number
+  updatedAt?: number
+  absent?: boolean
 }
 
 export interface ShiftEvent {
+  at?: number
   id: string
   key: string
   time: string
@@ -26,11 +45,11 @@ export const snapshotTime = '12:42'
 const sampleIncidents: Incident[] = [
   {key: 'auth', id: 'INC000021940126', product: 'МТС ID', title: 'Недоступна авторизация клиентов', registered: '12:22', due: '13:02', priority: 4, team: 'Команда авторизации', state: 'Назначен', research: false},
   {key: 'video', id: 'INC000021940127', product: 'KION', title: 'Прерывается просмотр трансляций', registered: '12:41', due: '13:08', priority: 4, team: 'Поддержка видео', state: 'Назначен', research: false},
-  {key: 'incident', id: 'INC000021940112', product: 'МТС Маркет', title: 'Задержка подтверждения оплаты', registered: '12:19', due: '13:10', priority: 4, team: 'Координаторы МИ', state: 'В работе', research: false, assignedAt: '12:31'},
+  {key: 'incident', id: 'INC000021940112', product: 'МТС Маркет', title: 'Задержка подтверждения оплаты', registered: '12:19', due: '13:10', priority: 4, team: 'Координаторы МИ', state: 'В работе', research: false, assignedAt: '12:31', assignee: 'Анна Котова'},
   {key: 'access', id: 'INC000021940087', product: 'МТС ID', title: 'Ошибка входа в профиль', registered: '12:15', due: '13:35', priority: 2, team: 'Координаторы МИ', state: 'Назначен', research: false, assignedAt: '12:18'},
   {key: 'kion', id: 'INC000021940098', product: 'KION', title: 'Долгий запуск трансляции', registered: '12:17', due: '13:20', priority: 3, team: 'Поддержка видео', state: 'В работе', research: false},
   {key: 'premium', id: 'INC000021940083', product: 'МТС Premium', title: 'Задержка активации подписки', registered: '12:12', due: '14:00', priority: 3, team: 'Поддержка подписок', state: 'В работе', research: false},
-  {key: 'delivery', id: 'INC000021939981', product: 'МТС Линк', title: 'Повторная доставка уведомлений', registered: '11:10', due: null, priority: 3, team: 'Команда уведомлений', state: 'Исследование ситуации', research: true, restoredAt: '11:54'},
+  {key: 'delivery', id: 'INC000021939981', product: 'МТС Линк', title: 'Повторная доставка уведомлений', registered: '11:10', due: null, priority: 3, team: 'Команда уведомлений', state: 'Исследование ситуации', research: true, restoredAt: '11:54', solution: 'Повторная доставка уведомлений устранена.'},
   {key: 'balance', id: 'INC000021939947', product: 'МТС Cashback', title: 'Расхождение баланса кешбэка', registered: '10:54', due: null, priority: 2, team: 'Поддержка лояльности', state: 'Исследование ситуации', research: true, restoredAt: '11:28'},
 ]
 
@@ -67,6 +86,27 @@ function clockTime(minutes: number) {
 function makeShiftSnapshot() {
   const incidents = [...sampleIncidents]
   const events = [...sampleEvents]
+  const history = new Map<string, CardRevision[]>()
+
+  // These ITSM revisions are part of the same demo scenario as the shift events.
+  for (const item of sampleIncidents) {
+    const versions: CardRevision[] = [{observedAt: item.registered, values: {}}]
+    if (item.assignedAt) versions.push({changedAt: item.assignedAt, observedAt: item.assignedAt, values: {team: item.team}})
+    if (item.restoredAt) versions.push({changedAt: item.restoredAt, observedAt: item.restoredAt, values: {state: 'Завершён'}})
+    if (item.research) versions.push({observedAt: snapshotTime, values: {state: item.state}})
+    history.set(item.key, versions)
+  }
+  history.set('incident', [
+    {observedAt: '12:19', values: {state: 'Назначен', team: 'Команда платежей', due: '13:19', assignee: null}},
+    {changedAt: '12:23', observedAt: '12:24', values: {state: 'В работе'}},
+    {observedAt: '12:29', values: {due: '13:10'}},
+    {changedAt: '12:31', observedAt: '12:31', values: {team: 'Координаторы МИ', assignee: 'Анна Котова'}},
+  ])
+  history.set('delivery', [
+    {observedAt: '11:10', values: {state: 'В работе', solution: null}},
+    {changedAt: '11:54', observedAt: '11:54', values: {state: 'Завершён', solution: 'Повторная доставка уведомлений устранена.'}},
+    {changedAt: '12:04', observedAt: '12:04', values: {state: 'Исследование ситуации'}},
+  ])
 
   for (let index = 0; incidents.length < 3600; index++) {
     // Each cycle includes open, restored, routed and post-incident cases.
@@ -105,11 +145,27 @@ function makeShiftSnapshot() {
       log('restore', 52, 'Команда подтвердила восстановление сервиса.')
     }
     if (routedForResearch) log('assign', 60, 'Исследование причин назначено на координаторов.')
+
+    const versions: CardRevision[] = [{observedAt: clockTime(start), values: {
+      state: 'Назначен', team: null, priority: escalated ? '3' : String(priority),
+    }}]
+    function revise(afterMinutes: number, values: CardRevision['values']) {
+      const time = clockTime(start + afterMinutes)
+      versions.push({changedAt: time, observedAt: time, values})
+    }
+    revise(2, {team: 'Координаторы МИ'})
+    if (!coordinator || routedForResearch) revise(4, {team: service.team, state: 'В работе'})
+    if (escalated) revise(5, {priority: '4'})
+    if (restored) revise(52, {state: 'Завершён'})
+    if (research) revise(56, {state: 'Исследование ситуации'})
+    if (routedForResearch) revise(60, {team: 'Координаторы МИ'})
+    history.set(key, versions)
   }
   events.sort((left, right) => right.time.localeCompare(left.time))
-  return {incidents, events}
+  return {incidents, events, history}
 }
 
 const shift = makeShiftSnapshot()
 export const initialIncidents = shift.incidents
 export const initialEvents = shift.events
+export const incidentRevisions: ReadonlyMap<string, readonly CardRevision[]> = shift.history

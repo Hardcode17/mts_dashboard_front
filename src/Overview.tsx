@@ -1,11 +1,14 @@
-import {useMemo, useSyncExternalStore} from 'react'
-import {Button, Card, Flex, Label, Link, Pagination, Progress, Select, Text, TextInput} from '@gravity-ui/uikit'
+import {useMemo} from 'react'
+import {Button, Card, Flex, Label, Link, Pagination, Progress, Select, Text, TextInput, useViewportSize} from '@gravity-ui/uikit'
 import {Table, useTable} from '@gravity-ui/table'
 import type {ColumnDef} from '@gravity-ui/table/tanstack'
-import {snapshotTime, type Incident, type ShiftEvent} from './demoData'
-import {EventStream} from './EventStream'
+import {type Incident, type ShiftEvent} from './demoData'
+import {EventStream, EventJournal} from './EventStream'
 import {ShiftCharts} from './ShiftCharts'
-import {remainingMinutes} from './shiftMetrics'
+import {incidentOrder,registrationTime} from './desk/order'
+import {useWorkspace} from './desk/context'
+import {QueueFilters} from './desk/QueueFilters'
+import {active,onCoordinators,standNow,dueInstant,fullTime} from './desk/types'
 import './Overview.css'
 
 const queues = [
@@ -17,15 +20,15 @@ const queues = [
 
 type QueueKey = typeof queues[number]['key']
 export type OverviewQueue = QueueKey | 'events' | 'all'
-type Props = {incidents: Incident[]; events: ShiftEvent[]; summary: boolean; wall: boolean; activeQueue: OverviewQueue}
+type Props = {listingHash:string; incidents: Incident[]; events: ShiftEvent[]; summary: boolean; wall: boolean; activeQueue: OverviewQueue}
 
 function groupIncidents(incidents: Incident[]) {
   const groups: Record<QueueKey, Incident[]> = {critical: [], assigned: [], high: [], research: []}
   for (const item of incidents) {
-    const active = !item.research && !item.restoredAt
-    if (active && item.priority === 4) groups.critical.push(item)
-    if (item.assignedAt && (active || item.research)) groups.assigned.push(item)
-    if (active && item.priority === 3) groups.high.push(item)
+    const isActive = active(item)
+    if (isActive && item.priority === 4) groups.critical.push(item)
+    if (onCoordinators(item)) groups.assigned.push(item)
+    if (isActive && item.priority === 3) groups.high.push(item)
     if (item.research) groups.research.push(item)
   }
   return groups
@@ -34,26 +37,17 @@ function groupIncidents(incidents: Incident[]) {
 const format = new Intl.NumberFormat('ru-RU')
 const pageSizes = [25, 50, 100]
 const sortOptions = [
-  {value: 'deadline', content: 'Ближайший срок'},
+  {value: 'deadline', content: 'Приоритет и срок'},
   {value: 'registered', content: 'Сначала новые'},
+  {value: 'updated', content: 'По обновлению'},
 ]
 
-function minutes(time: string) {
-  const [hours, mins] = time.split(':').map(Number)
-  return hours * 60 + mins
-}
-
-const snapshotMinute = minutes(snapshotTime)
-
-function compareDeadline(a: Incident, b: Incident) {
-  return (a.due ?? '24:00').localeCompare(b.due ?? '24:00') || a.id.localeCompare(b.id)
-}
-
 function CriticalTile({item}: {item: Incident}) {
-  const end = item.due ? minutes(item.due) : null
-  const start = minutes(item.registered)
-  const remaining = end === null ? null : end - snapshotMinute
-  const percent = end === null ? null : Math.max(0, Math.min(100, 100 * (snapshotMinute - start) / Math.max(1, end - start)))
+  const start=registrationTime(item)
+  const {desk,now}=useWorkspace()
+  const epoch=dueInstant(item)
+  const remaining=epoch===null?null:Math.ceil((epoch-standNow(desk,now))/60000)
+  const percent = epoch === null ? null : Math.max(0, Math.min(100,100*(standNow(desk,now)-start)/Math.max(1,epoch-start)))
   return (
     <Card view="outlined" className="overview-critical-tile mcc-glass mcc-tile">
       <Link view="primary" href={'#incident/' + item.key} className="overview-tile-link">
@@ -66,7 +60,7 @@ function CriticalTile({item}: {item: Incident}) {
             <Text variant="display-3">{remaining === null ? '—' : Math.abs(remaining)}</Text>
             <Text variant="body-2">{remaining === null ? 'срок не указан' : remaining < 0 ? 'мин просрочки' : 'мин до срока'}</Text>
           </Flex>
-          <Label size="s" theme={item.state === 'Назначен' ? 'info' : 'warning'}>{item.state}</Label>
+          <Label size="s" theme={item.state === 'Назначен' ? 'info' : 'normal'}>{item.state}</Label>
         </Flex>
         {percent !== null && <Progress size="xs" value={percent} className="overview-progress" />}
         <Flex alignItems="baseline" wrap="wrap" justifyContent="space-between" gap="spacing-2">
@@ -79,32 +73,40 @@ function CriticalTile({item}: {item: Incident}) {
 }
 
 function Deadline({item}: {item: Incident}) {
-  if (item.research || item.restoredAt) return <Text color="secondary">{item.restoredAt ? 'Устранён в ' + item.restoredAt : 'Сбой устранён'}</Text>
+  const {desk,now}=useWorkspace()
+  if (!active(item)) return <Text color="secondary">{item.restoredAt ? 'Устранён в ' + item.restoredAt : 'Сбой устранён'}</Text>
   if (!item.due) return <Text color="secondary">Срок не указан</Text>
-  const remaining = minutes(item.due) - snapshotMinute
+  const remaining = Math.ceil((dueInstant(item)!-standNow(desk,now))/60000)
   return <div className="overview-cell">
     <Text variant="subheader-1" color={remaining < 0 ? 'danger' : 'primary'}>{remaining < 0 ? 'Просрочка ' : ''}{Math.abs(remaining)} мин</Text>
-    <Text variant="caption-2" color="secondary">до {item.due}</Text>
+    <Text variant="caption-2" color="secondary">до {item.dueAt?fullTime(item.dueAt):item.due}</Text>
   </div>
 }
 
 const columns: ColumnDef<Incident>[] = [
-  {accessorKey: 'id', size: 132, header: 'Номер', cell: ({row}) => <Link className="incident-number" href={'#incident/' + row.original.key}><Text variant="code-inline-1">{row.original.id}</Text></Link>},
+  {accessorKey: 'id', size: 132, header: 'Номер', cell: ({row}) => <Link className="incident-number" href={'#drawer/' + row.original.key}><Text variant="code-inline-1">{row.original.id}</Text></Link>},
   {accessorKey: 'product', size: 345, header: 'Продукт и сбой', cell: ({row}) => <div className="overview-cell"><Text variant="subheader-2">{row.original.product}</Text><Text variant="body-1" className="overview-cell-symptom" title={row.original.title}>{row.original.title}</Text></div>},
   {accessorKey: 'team', size: 166, header: 'Назначенная команда'},
-  {accessorKey: 'state', size: 150, header: 'Статус', cell: ({row}) => <Label size="s" theme={row.original.research ? 'utility' : row.original.state === 'В работе' ? 'warning' : row.original.state === 'Назначен' ? 'info' : 'success'}>{row.original.state}</Label>},
-  {accessorKey: 'registered', size: 96, header: 'Регистрация'},
+  {accessorKey: 'state', size: 150, header: 'Статус', cell: ({row}) => <Label size="s" theme={row.original.research ? 'utility' : row.original.state === 'Назначен' ? 'info' : active(row.original) ? 'normal' : 'success'}>{row.original.state}</Label>},
+  {accessorKey: 'registered', size: 136, header: 'Регистрация', cell: ({row}) => <div className="overview-cell"><Text>{row.original.registered}</Text>{row.original.updatedAt&&<Text variant="caption-2" color="secondary">Обновлено {fullTime(row.original.updatedAt)}</Text>}</div>},
   {accessorKey: 'due', size: 110, header: 'Срок решения', cell: ({row}) => <Deadline item={row.original} />},
 ]
 
 function IncidentTable({rows, label}: {rows: Incident[]; label: string}) {
+  const {width} = useViewportSize()
   const table = useTable({data: rows, columns, getRowId: (item) => item.key})
+  if (width !== undefined && width <= 700) return (
+    <ul className="overview-incident-list" aria-label={label}>
+      {rows.map(item => <li key={item.key}>
+        <Link view="primary" href={'#drawer/' + item.key}>
+          <Text variant="caption-2" color="secondary">{item.product} · {item.id}</Text>
+          <Text variant="subheader-2">{item.title}</Text>
+          <Deadline item={item} />
+        </Link>
+      </li>)}
+    </ul>
+  )
   return <Table table={table} size="s" stickyHeader verticalAlign="middle" className="overview-data-table" attributes={{'aria-label': label}} />
-}
-
-function subscribeHash(onChange: () => void) {
-  window.addEventListener('hashchange', onChange)
-  return () => window.removeEventListener('hashchange', onChange)
 }
 
 function queueHref(queue: OverviewQueue, params: URLSearchParams) {
@@ -112,34 +114,46 @@ function queueHref(queue: OverviewQueue, params: URLSearchParams) {
   return (queue === 'events' ? '#events' : '#queue/' + queue) + (query ? '?' + query : '')
 }
 
-export function Overview({incidents, events, wall, summary, activeQueue = 'critical'}: Props) {
-  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash)
+export function Overview({listingHash, incidents, events, wall, summary, activeQueue = 'critical'}: Props) {
+  const {desk,now}=useWorkspace()
+  const reference=standNow(desk,now)
+  const hash=listingHash
   const params = new URLSearchParams(hash.split('?')[1])
   const query = params.get('q') ?? ''
-  const sort = params.get('sort') === 'registered' ? 'registered' : 'deadline'
+  const sort = params.get('sort') || 'deadline'
   const sizeParam = Number(params.get('size'))
   const size = pageSizes.includes(sizeParam) ? sizeParam : pageSizes[0]
   const groups = useMemo(() => groupIncidents(incidents), [incidents])
   const groupKey = activeQueue === 'events' ? 'critical' : activeQueue
   const group = groupKey === 'all' ? incidents : groups[groupKey]
   const soonOnly = groupKey === 'critical' && params.get('sla') === 'soon'
+  const clearFilters = Object.fromEntries(['q', 'priority', 'product', 'team', 'state', 'serviceType', 'deadline', 'sla', 'page'].map(key => [key, '']))
+  const filtered = Object.keys(clearFilters).some(key => key !== 'page' && Boolean(params.get(key)))
   const words = query.trim().toLocaleLowerCase('ru-RU').split(/\s+/).filter(Boolean)
-  const results = group.filter((item) => {
+  const results = wall||summary||activeQueue==='events'?[]:group.filter((item) => {
     if (soonOnly) {
-      const left = remainingMinutes(item.due, snapshotTime)
+      const at=dueInstant(item);const left=at===null?null:Math.ceil((at-reference)/60000)
       if (left === null || left < 0 || left > 30) return false
     }
+    for(const field of ['priority','product','team','state','serviceType'] as const){
+      const value=params.get(field);if(value&&String(item[field]??'')!==value)return false
+    }
+    const deadline=params.get('deadline'),due=dueInstant(item)
+    if(deadline==='none'&&due!==null)return false
+    if(deadline==='late'&&(!active(item)||due===null||due>=reference))return false
+    if(deadline==='near'&&(!active(item)||due===null||due<reference||due-reference>desk.threshold*60000))return false
     if (!words.length) return true
     const text = [item.id, item.product, item.title, item.team].join(' ').toLocaleLowerCase('ru-RU')
     return words.every((word) => text.includes(word))
-  }).sort(sort === 'registered' ? (a, b) => b.registered.localeCompare(a.registered) || a.id.localeCompare(b.id) : compareDeadline)
+  }).sort(sort==='updated'?(a,b)=>(b.updatedAt??registrationTime(b))-(a.updatedAt??registrationTime(a))||incidentOrder(a,b):
+    sort==='registered'?(a,b)=>registrationTime(b)-registrationTime(a)||a.id.localeCompare(b.id):incidentOrder)
   const lastPage = Math.max(1, Math.ceil(results.length / size))
   const requestedPage = Number(params.get('page'))
   const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(lastPage, requestedPage)) : 1
   const first = (page - 1) * size
   const pageRows = results.slice(first, first + size)
   const selected = groupKey === 'all' ? {title: 'Все инциденты', symbol: '≡'} : queues.find((queue) => queue.key === groupKey)!
-  const navParams = new URLSearchParams(params)
+  const navParams = activeQueue === 'events' ? new URLSearchParams() : new URLSearchParams(params)
   navParams.delete('page')
   navParams.delete('sla')
 
@@ -151,7 +165,7 @@ export function Overview({incidents, events, wall, summary, activeQueue = 'criti
   }
 
   if (wall || summary) {
-    const critical = [...groups.critical].sort(compareDeadline).slice(0, 3)
+    const critical = [...groups.critical].sort(incidentOrder).slice(0, 3)
     return <div className={wall ? 'overview-wall' : 'overview-summary'}>
       <div className="overview-wall-main">
         <div className="overview-wall-stats">
@@ -163,11 +177,14 @@ export function Overview({incidents, events, wall, summary, activeQueue = 'criti
         {summary && <ShiftCharts incidents={incidents} critical={groups.critical} />}
         <Flex justifyContent="space-between" alignItems="baseline" wrap="wrap" gap="spacing-2">
           <Text as="h2" variant="header-2">Ближайшие критические сроки</Text>
-          <Text color="secondary">Показано {critical.length} из {format.format(groups.critical.length)}</Text>
+          <Flex alignItems="center" gap="spacing-3" wrap>
+            {summary && desk.mode==='volume' && <Link href="#investigation/incident">Пример разбора агентом</Link>}
+            <Text color="secondary">Показано {critical.length} из {format.format(groups.critical.length)}</Text>
+          </Flex>
         </Flex>
-        <div className="overview-critical-grid">{critical.map((item) => <CriticalTile key={item.key} item={item} />)}</div>
+        <div className="overview-critical-grid">{!critical.length&&<Text color="secondary">Активных критических инцидентов нет.</Text>}{critical.map((item) => <CriticalTile key={item.key} item={item} />)}</div>
       </div>
-      {wall && <EventStream incidents={incidents} events={events} expanded={false} />}
+      <EventStream incidents={incidents} events={events} />
     </div>
   }
 
@@ -189,28 +206,29 @@ export function Overview({incidents, events, wall, summary, activeQueue = 'criti
       <Link view="primary" href={queueHref('all', navParams)} aria-current={activeQueue === 'all' ? 'page' : undefined} className="overview-nav-log">
         <Text variant="subheader-2">Все инциденты</Text><Text color="secondary">{format.format(incidents.length)}</Text>
       </Link>
-      <Link view="primary" href={queueHref('events', navParams)} aria-current={activeQueue === 'events' ? 'page' : undefined} className="overview-nav-log">
+      <Link view="primary" href="#events" aria-current={activeQueue === 'events' ? 'page' : undefined} className="overview-nav-log">
         <Text variant="subheader-2">Журнал событий</Text><Text aria-hidden="true">→</Text>
       </Link>
     </nav>
     {activeQueue === 'events' ? <section className="overview-log" aria-label="Журнал событий">
 
-      <EventStream incidents={incidents} events={events} expanded />
+      <EventJournal incidents={incidents} events={events} params={params} update={update} />
     </section> : <section aria-label={selected.title} className={'overview-table-panel mcc-glass overview-kind-' + groupKey}>
       <div className="overview-table-toolbar">
         <Flex alignItems="baseline" gap="spacing-2" wrap="wrap">
           <span className="overview-nav-icon" aria-hidden="true">{selected.symbol}</span>
           <Text as="h2" variant="header-2">{selected.title}</Text>
-          <Label size="s">{format.format(group.length)}</Label>
+          <Label size="s">{filtered ? format.format(results.length) + ' из ' + format.format(group.length) : format.format(group.length)}</Label>
           {soonOnly && <Label type="close" theme="warning" closeButtonLabel="Снять фильтр по сроку" onCloseClick={() => update({sla: '', page: ''})}>До 30 минут</Label>}
         </Flex>
         <div className="overview-controls">
           <TextInput size="l" value={query} onUpdate={(q) => update({q, page: ''})} hasClear
             placeholder="Номер, продукт, сбой или команда" controlProps={{'aria-label': groupKey === 'all' ? 'Поиск по всем инцидентам' : 'Поиск в очереди'}} />
           <Select size="l" label="Порядок" value={[sort]} options={sortOptions}
-            onUpdate={([value]) => update({sort: value === 'registered' ? value : '', page: ''})} />
+            onUpdate={([value]) => update({sort: value === 'deadline' ? '' : value, page: ''})} />
         </div>
       </div>
+      <QueueFilters incidents={incidents} queue={groupKey} params={params} update={update} reset={() => update(clearFilters)} />
       {pageRows.length ? <>
         <div className="overview-table-scroll" tabIndex={0} role="region" aria-label="Список инцидентов">
           <IncidentTable rows={pageRows} label={selected.title} />
@@ -221,8 +239,8 @@ export function Overview({incidents, events, wall, summary, activeQueue = 'criti
             className="overview-pagination" onUpdate={(nextPage, nextSize) => update({page: nextSize === size ? String(nextPage) : '', size: String(nextSize)})} />
         </div>
       </> : <div className="overview-table-empty">
-        <Text variant="subheader-2">{query ? 'Ничего не найдено' : 'Очередь пуста'}</Text>
-        {query && <Button view="outlined" onClick={() => update({q: '', page: ''})}>Сбросить поиск</Button>}
+        <Text variant="subheader-2">{filtered ? 'По заданным условиям инцидентов нет' : 'Очередь пуста'}</Text>
+        {filtered && <Button view="outlined" onClick={() => update(clearFilters)}>Сбросить поиск и фильтры</Button>}
       </div>}
     </section>}
   </div>
