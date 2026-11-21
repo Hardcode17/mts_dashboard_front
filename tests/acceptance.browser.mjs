@@ -216,13 +216,67 @@ test('acceptance: similar incidents, staffing estimate, operator decision, notes
   assert.equal(messages.find((n) => n.channel === 'SMS').tries, 2)
   assert(messages.filter((n) => n.channel !== 'SMS').every((n) => n.tries === 1))
 })
+test('all incident queues stay mounted while sidebar links scroll and pagination stays local', async (t) => {
+  const {open, root} = await stand(t)
+  const page = await open('volume', 'anna', 1920)
+  await page.goto(root + '/#queue/critical')
+
+  const critical = page.getByRole('region', {name: 'Критические', exact: true})
+  const high = page.getByRole('region', {name: 'Высокий приоритет', exact: true})
+  await expect(critical.getByRole('table')).toBeVisible()
+  await expect(page.getByRole('region', {name: 'На координаторах', exact: true})).toBeVisible()
+  await expect(high.getByRole('table')).toBeVisible()
+  await expect(page.getByRole('region', {name: 'Исследование ситуации', exact: true})).toBeVisible()
+  const sidebar = page.getByRole('navigation', {name: 'Очереди смены'})
+  await page.evaluate(() => {
+    window.queueScrolls = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (options) {
+      window.queueScrolls.push(options?.behavior)
+      original.call(this, options)
+    }
+  })
+  await page.emulateMedia({reducedMotion: 'no-preference'})
+  await sidebar.getByRole('link', {name: /Высокий приоритет/}).click()
+  await expect(high.getByRole('heading')).toBeInViewport()
+  assert.equal(await page.evaluate(() => window.queueScrolls.at(-1)), 'smooth')
+  await expect(sidebar.getByRole('link', {name: /Критические/})).toBeInViewport()
+
+  await high.getByRole('button', {name: 'Следующая'}).click()
+  await expect(high.getByText(/^26–50 из /)).toBeVisible()
+  await expect(critical.getByText(/^1–25 из /)).toBeVisible()
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await sidebar.getByRole('link', {name: /Критические/}).click()
+  await expect(critical.getByRole('heading')).toBeInViewport()
+  assert.equal(await page.evaluate(() => window.queueScrolls.at(-1)), 'instant')
+  await expect(high.getByText(/^26–50 из /)).toBeVisible()
+})
+
+test('the wall shows arrivals and completions when the active total stays the same', async (t) => {
+  const active = fixture.find(row => row.stateEnum === 'WorkInProgress' && row.priorityId < 4)
+  const {open, file, root} = await stand(t, [active])
+  const page = await open('api', 'anna', 1920)
+  await page.goto(root + '/#wall')
+  const flow = page.getByRole('region', {name: 'Поток инцидентов'})
+  await expect(flow.getByText('1', {exact: true})).toBeVisible()
+  await expect(flow.getByText('+0', {exact: true})).toBeVisible()
+
+  const completed = {...active, stateEnum: 'Resolved', completionDate: new Date().toISOString()}
+  const incoming = {...active, id: 'INC000099999994'}
+  await writeFile(file, JSON.stringify([completed, incoming]))
+  await expect(flow.getByText('+1', {exact: true})).toBeVisible({timeout: 9000})
+  await expect(flow.getByText('−1', {exact: true})).toBeVisible()
+  await expect(flow.getByText('1', {exact: true})).toBeVisible()
+})
+
 test('acceptance: queue filters, responsive layouts, analysis sources, telemetry loss and recovery experiment', async (t) => {
   const {open, root, read} = await stand(t),
     p = await open('volume', 'anna', 390)
   await p.locator('input[value="dark"]').check()
   await p.goto(root + '/#queue/all')
   await p.getByLabel('Поиск по всем инцидентам').fill('INC000021940112')
-  await p.locator('.overview-table-scroll a').first().click()
+  await p.getByRole('region', {name: 'Все инциденты', exact: true})
+    .getByRole('link', {name: /INC000021940112/}).click()
   await expect(p.getByRole('region', {name: 'Быстрый просмотр инцидента'})).toBeVisible()
   await p.getByRole('link', {name: 'Полная карточка'}).click()
   await p.getByRole('button', {name: 'Разобрать причину агентом'}).click()
@@ -253,13 +307,14 @@ test('saved queue, failed import and pinned agent evidence survive navigation an
   const {open, root, read} = await stand(t)
   const p = await open()
   await p.goto(root + '/#queue/all?q=МТС')
-  await p.getByText('Фильтры и сохранённые представления').click()
-  await p.getByRole('textbox', {name: 'Название представления'}).fill('Мои продукты')
-  await p.getByRole('button', {name: 'Сохранить представление'}).click()
-  await expect(p.getByRole('link', {name: 'Мои продукты'})).toBeVisible()
+  const all = p.getByRole('region', {name: 'Все инциденты', exact: true})
+  await all.getByText('Фильтры и сохранённые представления').click()
+  await all.getByRole('textbox', {name: 'Название представления'}).fill('Мои продукты')
+  await all.getByRole('button', {name: 'Сохранить представление'}).click()
+  await expect(all.getByRole('link', {name: 'Мои продукты'})).toBeVisible()
   await p.reload()
-  await p.getByText('Фильтры и сохранённые представления').click()
-  await p.getByRole('link', {name: 'Мои продукты'}).click()
+  await all.getByText('Фильтры и сохранённые представления').click()
+  await all.getByRole('link', {name: 'Мои продукты'}).click()
   await expect(p.getByLabel('Поиск по всем инцидентам')).toHaveValue('МТС')
   await p.goto(root + '/incidents/INC000021940112?source=volume')
   await p.getByRole('button', {name: 'Разобрать причину агентом'}).click()
@@ -353,7 +408,8 @@ test('refreshing a full card preserves the route back to its filtered queue', as
   const page = await open()
   const listing = '#queue/all?q=INC000021940112'
   await page.goto(root + '/' + listing)
-  await page.getByRole('link', {name: 'INC000021940112', exact: true}).click()
+  await page.getByRole('region', {name: 'Все инциденты', exact: true})
+    .getByRole('link', {name: 'INC000021940112', exact: true}).click()
   await page.getByRole('link', {name: 'Полная карточка'}).click()
   await page.reload()
   await expect(page.locator('main a').filter({hasText: /←/}).first()).toHaveAttribute('href', listing)

@@ -1,4 +1,5 @@
 import type {CardRevision} from './incidentHistory.ts'
+import type {IncidentGroup} from './entities/incident/model/api-types.ts'
 
 export interface Incident {
   key: string
@@ -29,6 +30,7 @@ export interface Incident {
   registeredAt?: number
   updatedAt?: number
   absent?: boolean
+  groups?: IncidentGroup[]
 }
 
 export interface ShiftEvent {

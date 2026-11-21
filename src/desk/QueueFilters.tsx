@@ -23,6 +23,7 @@ const fields = [
 export function QueueFilters({incidents, params, update, queue, reset}: Props) {
   const {desk, act, person} = useWorkspace()
   const [name, setName] = useState('')
+  const fieldId = 'queue-filter-' + queue + '-'
   const list = desk.presets[person] ?? []
   const activeFilters = [...fields.map(([field]) => field), 'deadline'].filter((key) =>
     params.get(key),
@@ -38,9 +39,9 @@ export function QueueFilters({incidents, params, update, queue, reset}: Props) {
             const values = [...new Set(incidents.map((i) => String(i[field] ?? '')).filter(Boolean))].sort()
             return (
               <div key={field} className="mcc-field">
-                <label htmlFor={'queue-filter-' + field}>{label}</label>
+                <label htmlFor={fieldId + field}>{label}</label>
                 <Select
-                  id={'queue-filter-' + field}
+                  id={fieldId + field}
                   width="max"
                   filterable
                   options={['', ...values].map((v) => ({
@@ -54,9 +55,9 @@ export function QueueFilters({incidents, params, update, queue, reset}: Props) {
             )
           })}
           <div className="mcc-field">
-            <label htmlFor="queue-filter-deadline">Срок решения</label>
+            <label htmlFor={fieldId + 'deadline'}>Срок решения</label>
             <Select
-              id="queue-filter-deadline"
+              id={fieldId + 'deadline'}
               width="max"
               value={[params.get('deadline') ?? '']}
               options={[
@@ -75,8 +76,8 @@ export function QueueFilters({incidents, params, update, queue, reset}: Props) {
         <div className="queue-presets">
           <div className="queue-preset-form">
             <div className="mcc-field">
-              <label htmlFor="queue-preset-name">Название представления</label>
-              <TextInput id="queue-preset-name" value={name} onUpdate={setName} />
+              <label htmlFor={fieldId + 'preset-name'}>Название представления</label>
+              <TextInput id={fieldId + 'preset-name'} value={name} onUpdate={setName} />
             </div>
             <Button
               disabled={!name.trim()}
