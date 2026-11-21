@@ -61,6 +61,13 @@ async function stand(t, rows = fixture) {
     read: async (mode) => (await (await fetch(root + '/api/stand/snapshot?mode=' + mode)).json()).desk,
   }
 }
+async function setTheme(page, theme) {
+  const toggle = page.getByRole('switch', {name: 'Тёмная тема'})
+  const checked = String(theme === 'dark')
+  if (await toggle.getAttribute('aria-checked') !== checked) await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', checked)
+}
+
 test('acceptance: file polling, critical burst, resolution, external card, revisions and stale input', async (t) => {
   const {open, file, root, read} = await stand(t),
     p = await open('case')
@@ -216,13 +223,115 @@ test('acceptance: similar incidents, staffing estimate, operator decision, notes
   assert.equal(messages.find((n) => n.channel === 'SMS').tries, 2)
   assert(messages.filter((n) => n.channel !== 'SMS').every((n) => n.tries === 1))
 })
+test('all incident queues stay mounted while sidebar links scroll and pagination stays local', async (t) => {
+  const {open, root} = await stand(t)
+  const page = await open('volume', 'anna', 1920)
+  await page.goto(root + '/#queue/critical')
+
+  const critical = page.getByRole('region', {name: 'Критические', exact: true})
+  const high = page.getByRole('region', {name: 'Высокий приоритет', exact: true})
+  await expect(critical.getByRole('table')).toBeVisible()
+  await expect(page.getByRole('region', {name: 'На координаторах', exact: true})).toBeVisible()
+  await expect(high.getByRole('table')).toBeVisible()
+  await expect(page.getByRole('region', {name: 'Исследование ситуации', exact: true})).toBeVisible()
+  const sidebar = page.getByRole('navigation', {name: 'Очереди смены'})
+  await page.evaluate(() => {
+    window.queueScrolls = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (options) {
+      window.queueScrolls.push(options?.behavior)
+      original.call(this, options)
+    }
+  })
+  await page.emulateMedia({reducedMotion: 'no-preference'})
+  await sidebar.getByRole('link', {name: /Высокий приоритет/}).click()
+  await expect(high.getByRole('heading')).toBeInViewport()
+  assert.equal(await page.evaluate(() => window.queueScrolls.at(-1)), 'smooth')
+  await expect(sidebar.getByRole('link', {name: /Критические/})).toBeInViewport()
+
+  await high.getByRole('button', {name: 'Следующая'}).click()
+  await expect(high.getByText(/^26–50 из /)).toBeVisible()
+  await expect(critical.getByText(/^1–25 из /)).toBeVisible()
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await sidebar.getByRole('link', {name: /Критические/}).click()
+  await expect(critical.getByRole('heading')).toBeInViewport()
+  assert.equal(await page.evaluate(() => window.queueScrolls.at(-1)), 'instant')
+  await expect(high.getByText(/^26–50 из /)).toBeVisible()
+})
+
+test('the dashboard distinguishes an unpublished snapshot from a stale published snapshot', async t => {
+  const {open, root} = await stand(t)
+  const page = await open('api')
+  let phase = 'waiting'
+  await page.route('**/api/dashboard/incidents?*', route => {
+    if (phase === 'waiting') return route.fulfill({json: {
+      revision: 0, eventSeq: 0, beforeFirstSuccess: true, groups: [], items: [], nextCursor: null,
+    }})
+    if (phase === 'failed') return route.fulfill({status: 503, json: {code: 'UNAVAILABLE', message: 'Service unavailable'}})
+    return route.continue()
+  })
+  await page.route('**/api/snapshot/status', route => phase === 'waiting'
+    ? route.fulfill({json: {revision: null, stale: true, lastReceivedAt: null, lastSuccessAt: null}})
+    : route.continue())
+
+  await page.goto(root + '/#queue/high')
+  await page.reload()
+  const source = page.getByRole('group', {name: 'Состояние данных'})
+  await expect(source.getByRole('status')).toHaveText('Ожидаем первый опубликованный снимок')
+  await expect(source.getByRole('alert')).toHaveCount(0)
+
+  phase = 'published'
+  await source.getByRole('button', {name: 'Проверить снова'}).click()
+  const high = page.getByRole('region', {name: 'Высокий приоритет', exact: true})
+  const row = high.getByRole('table').getByRole('link').first()
+  await expect(row).toBeVisible()
+  const number = await row.textContent()
+  await expect(source.getByRole('status')).toHaveCount(0)
+
+  phase = 'failed'
+  await expect(source.getByRole('alert')).toContainText('Устаревшие данные', {timeout: 10000})
+  await expect(row).toHaveText(number)
+})
+
+test('the wall shows arrivals and completions when the active total stays the same', async (t) => {
+  const active = fixture.find(row => row.stateEnum === 'WorkInProgress' && row.priorityId < 4)
+  const {open, file, root} = await stand(t, [active])
+  const page = await open('api', 'anna', 1920)
+  await page.goto(root + '/#wall')
+  const flow = page.getByRole('region', {name: 'Поток инцидентов'})
+  await expect(flow.getByText('1', {exact: true})).toBeVisible()
+  await expect(flow.getByText('+0', {exact: true})).toBeVisible()
+
+  const completed = {...active, stateEnum: 'Resolved', completionDate: new Date().toISOString()}
+  const incoming = {...active, id: 'INC000099999994'}
+  await writeFile(file, JSON.stringify([completed, incoming]))
+  await expect(flow.getByText('+1', {exact: true})).toBeVisible({timeout: 9000})
+  await expect(flow.getByText('−1', {exact: true})).toBeVisible()
+  await expect(flow.getByText('1', {exact: true})).toBeVisible()
+
+  await page.goto(root + '/#queue/all')
+  const all = page.getByRole('region', {name: 'Все инциденты', exact: true})
+  await all.getByRole('link', {name: incoming.id, exact: true}).click()
+  await expect(page).toHaveURL(root + '/incidents/' + incoming.id)
+  const card = page.getByRole('region', {name: 'Карточка ' + incoming.id})
+  await expect(card.getByRole('heading', {name: incoming.header})).toBeVisible()
+  await card.getByRole('link', {name: 'Закрыть'}).click()
+  await page.getByRole('navigation', {name: 'Разделы дашборда'})
+    .getByRole('link', {name: 'Моя смена'}).click()
+  await expect(page.getByRole('heading', {name: 'Источник карточек'})).toBeVisible()
+  await page.getByText('API MCC · mock/backend', {exact: true}).click()
+  await page.getByRole('option', {name: 'Кейс МТС · JSON'}).click()
+  await expect(page.getByRole('group', {name: 'Состояние данных'})).toContainText('Снимок ITSM')
+})
+
 test('acceptance: queue filters, responsive layouts, analysis sources, telemetry loss and recovery experiment', async (t) => {
   const {open, root, read} = await stand(t),
     p = await open('volume', 'anna', 390)
-  await p.locator('input[value="dark"]').check()
+  await setTheme(p, 'dark')
   await p.goto(root + '/#queue/all')
   await p.getByLabel('Поиск по всем инцидентам').fill('INC000021940112')
-  await p.locator('.overview-table-scroll a').first().click()
+  await p.getByRole('region', {name: 'Все инциденты', exact: true})
+    .getByRole('link', {name: /INC000021940112/}).click()
   await expect(p.getByRole('region', {name: 'Быстрый просмотр инцидента'})).toBeVisible()
   await p.getByRole('link', {name: 'Полная карточка'}).click()
   await p.getByRole('button', {name: 'Разобрать причину агентом'}).click()
@@ -252,14 +361,20 @@ test('acceptance: queue filters, responsive layouts, analysis sources, telemetry
 test('saved queue, failed import and pinned agent evidence survive navigation and reload', async (t) => {
   const {open, root, read} = await stand(t)
   const p = await open()
-  await p.goto(root + '/#queue/all?q=МТС')
-  await p.getByText('Фильтры и сохранённые представления').click()
-  await p.getByRole('textbox', {name: 'Название представления'}).fill('Мои продукты')
-  await p.getByRole('button', {name: 'Сохранить представление'}).click()
-  await expect(p.getByRole('link', {name: 'Мои продукты'})).toBeVisible()
+  const all = p.getByRole('region', {name: 'Все инциденты', exact: true})
+  await p.goto(root + '/#queue/all')
+  await all.getByText('Фильтры и сохранённые представления').click()
+  await expect(all.getByRole('heading', {name: 'Мои представления'})).toBeVisible()
+  await all.getByRole('link', {name: 'Просроченное на координаторах'}).click()
+  await expect(p).toHaveURL(/#queue\/assigned\?deadline=late/)
+  await p.goto(root + '/#queue/all?q=МТС&page=2')
+  await all.getByRole('textbox', {name: 'Название представления'}).fill('Мои продукты')
+  await all.getByRole('button', {name: 'Сохранить представление'}).click()
+  await expect(all.getByRole('link', {name: 'Мои продукты'})).toBeVisible()
+  await expect(all.getByRole('link', {name: 'Мои продукты'})).not.toHaveAttribute('href', /page=/)
   await p.reload()
-  await p.getByText('Фильтры и сохранённые представления').click()
-  await p.getByRole('link', {name: 'Мои продукты'}).click()
+  await all.getByText('Фильтры и сохранённые представления').click()
+  await all.getByRole('link', {name: 'Мои продукты'}).click()
   await expect(p.getByLabel('Поиск по всем инцидентам')).toHaveValue('МТС')
   await p.goto(root + '/incidents/INC000021940112?source=volume')
   await p.getByRole('button', {name: 'Разобрать причину агентом'}).click()
@@ -303,10 +418,18 @@ test('shift panels keep their spacing on a direct visit and fit a narrow screen 
   await page.goto(root + '/#desk/tasks')
   assert.deepEqual(await layout(), direct)
 
+  await setTheme(page, 'light')
+  const toggle = page.getByRole('switch', {name: 'Тёмная тема'})
+  await toggle.focus()
+  await page.keyboard.press('Space')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await page.reload()
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+
   await page.getByRole('radio', {name:/В очереди/}).check()
   await expect(page.locator('.shift-task-list > li').first()).toBeVisible()
   for (const theme of ['light', 'dark']) {
-    await page.locator('input[value="'+theme+'"]').check()
+    await setTheme(page, theme)
     await page.setViewportSize({width:320, height:850})
     for (const [route, selector] of [['desk/tasks','.shift-queue'], ['desk/notifications','.shift-notifications'], ['desk/source','.desk-grid'], ['queue/all','.overview-table-panel'], ['overview','.overview-summary']]) {
       await page.goto(root + '/#' + route)
@@ -353,7 +476,8 @@ test('refreshing a full card preserves the route back to its filtered queue', as
   const page = await open()
   const listing = '#queue/all?q=INC000021940112'
   await page.goto(root + '/' + listing)
-  await page.getByRole('link', {name: 'INC000021940112', exact: true}).click()
+  await page.getByRole('region', {name: 'Все инциденты', exact: true})
+    .getByRole('link', {name: 'INC000021940112', exact: true}).click()
   await page.getByRole('link', {name: 'Полная карточка'}).click()
   await page.reload()
   await expect(page.locator('main a').filter({hasText: /←/}).first()).toHaveAttribute('href', listing)
@@ -426,7 +550,7 @@ test('expanded agent diagnostics keep labels, checkboxes and the submit action v
   for (const [key, width, theme] of [['incident', 1440, 'light'], ['access', 320, 'dark']]) {
     await p.setViewportSize({width, height: 900})
     await p.goto(root + '/#investigation/' + key)
-    await p.locator('input[value="'+theme+'"]').check()
+    await setTheme(p, theme)
     const summary = p.locator('summary').filter({hasText: 'Источники и проверки стенда'})
     await summary.focus()
     await p.keyboard.press('Enter')
@@ -447,4 +571,63 @@ test('expanded agent diagnostics keep labels, checkboxes and the submit action v
     await expect(p.getByRole('heading', {name:'Вывод агента'})).toBeVisible()
     assert(await p.evaluate(() => document.documentElement.scrollWidth === innerWidth))
   }
+})
+
+test('a long desktop queue only mounts the visible rows and scrolls to more incidents', async t => {
+  const {open, root} = await stand(t)
+  const page = await open('volume', 'anna', 1440)
+  await page.goto(root + '/#queue/all?size=100')
+  const scroll = page.getByRole('region', {name: 'Все инциденты', exact: true})
+    .getByRole('region', {name: 'Список инцидентов'})
+  const rows = scroll.locator('tbody tr')
+  await expect(rows.first()).toBeVisible()
+  assert((await rows.count()) < 100)
+  const firstRow = await rows.first().textContent()
+  await scroll.evaluate(el => { el.scrollTop = el.scrollHeight })
+  await expect.poll(() => rows.first().textContent()).not.toBe(firstRow)
+})
+
+test('coordinator reorders overview blocks with keyboard controls and reset survives a reload', async t => {
+  const {open} = await stand(t)
+  const p = await open()
+  const blocks = () => p.locator('[data-overview-block]').evaluateAll(nodes => nodes.map(node => node.dataset.overviewBlock))
+  await expect(p.getByRole('heading', {name: 'Сводка смены'})).toBeVisible()
+  assert.deepEqual(await blocks(), ['stats', 'charts', 'critical'])
+  await expect(p.getByRole('region', {name: 'Порядок блоков'})).toHaveCount(0)
+
+  await p.getByRole('button', {name: 'Настроить порядок блоков'}).click()
+  const settings = p.getByRole('region', {name: 'Порядок блоков'})
+  await expect(settings).toBeVisible()
+  const chartsUp = settings.getByRole('button', {name: 'Переместить блок «Динамика и сроки» выше'})
+  await expect(chartsUp).toBeEnabled()
+  await chartsUp.focus()
+  await p.keyboard.press('Enter')
+  assert.deepEqual(await blocks(), ['charts', 'stats', 'critical'])
+  await expect(settings.getByRole('button', {name: 'Переместить блок «Динамика и сроки» выше'})).toBeDisabled()
+
+  const statsDown = settings.getByRole('button', {name: 'Переместить блок «Показатели очередей» ниже'})
+  await statsDown.focus()
+  await p.keyboard.press('Enter')
+  assert.deepEqual(await blocks(), ['charts', 'critical', 'stats'])
+  await expect(settings.getByRole('button', {name: 'Переместить блок «Показатели очередей» ниже'})).toBeDisabled()
+  await expect(p.getByRole('region', {name: 'Показатели очередей'}).getByRole('link', {name: /Критические/})).toHaveAttribute('href', '#queue/critical')
+  await expect(p.getByRole('region', {name: 'Динамика и сроки'})).toBeVisible()
+
+  await p.reload()
+  await expect(p.getByRole('heading', {name: 'Сводка смены'})).toBeVisible()
+  assert.deepEqual(await blocks(), ['charts', 'critical', 'stats'])
+
+  await p.getByRole('button', {name: 'Настроить порядок блоков'}).click()
+  await p.getByRole('button', {name: 'Сбросить по умолчанию'}).click()
+  assert.deepEqual(await blocks(), ['stats', 'charts', 'critical'])
+  assert.equal(await p.evaluate(() => localStorage.getItem('mcc-overview-order')), null)
+  await p.setViewportSize({width: 390, height: 900})
+  await setTheme(p, 'dark')
+  await expect(settings).toBeVisible()
+  await expect.poll(() => p.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
+  await p.getByRole('button', {name: 'Готово'}).click()
+  await expect(settings).toHaveCount(0)
+  await p.reload()
+  await expect(p.getByRole('heading', {name: 'Сводка смены'})).toBeVisible()
+  assert.deepEqual(await blocks(), ['stats', 'charts', 'critical'])
 })

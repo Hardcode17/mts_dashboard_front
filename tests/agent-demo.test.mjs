@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
-import {initialIncidents, additionalIncidents} from '../src/demoData.ts'
-import {analyzeDemoIncident} from '../src/agentDemo.ts'
+import {initialIncidents, additionalIncidents} from '../mock/demoData.ts'
+import {analyzeDemoIncident} from '../mock/agentDemo.ts'
 
 const payment = initialIncidents.find(item => item.key === 'incident')
 

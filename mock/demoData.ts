@@ -1,44 +1,5 @@
-import type {CardRevision} from './incidentHistory.ts'
-
-export interface Incident {
-  key: string
-  id: string
-  title: string
-  product: string
-  team: string
-  state: string
-  registered: string
-  due: string | null
-  priority: number
-  research: boolean
-  assignedAt?: string
-  restoredAt?: string
-  assignee?: string
-  solution?: string
-  service?: string
-  serviceType?: string
-  description?: string
-  impact?: string
-  flags?: string[]
-  dueAt?: number | null
-  site?:string
-  specialists?: number
-  workMinutes?:number
-  restoredEpoch?: number
-  assignedEpoch?:number
-  registeredAt?: number
-  updatedAt?: number
-  absent?: boolean
-}
-
-export interface ShiftEvent {
-  at?: number
-  id: string
-  key: string
-  time: string
-  kind: 'new' | 'assign' | 'due' | 'restore'
-  change: string
-}
+import type {CardRevision} from '../src/incidentHistory.ts'
+import {moscowTime, type Incident, type ShiftEvent} from '../src/desk/types.ts'
 
 export const snapshotTime = '12:42'
 
@@ -169,3 +130,55 @@ const shift = makeShiftSnapshot()
 export const initialIncidents = shift.incidents
 export const initialEvents = shift.events
 export const incidentRevisions: ReadonlyMap<string, readonly CardRevision[]> = shift.history
+
+function minuteOfDay(value: string) {
+  const [hours, minutes] = value.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+export function fixtureTime(started: number, value: string): number {
+  return Math.floor(started / 60_000) * 60_000 + (minuteOfDay(value) - minuteOfDay(snapshotTime)) * 60_000
+}
+
+function makeVolumeFixture(started: number) {
+  const at = (value: string) => fixtureTime(started, value)
+  const iso = (value: string) => new Date(at(value)).toISOString()
+  const records: Record<string, Incident> = Object.fromEntries(initialIncidents.map((item) => {
+    const registeredAt = at(item.registered)
+    const dueAt = item.due === null ? null : at(item.due)
+    const assignedEpoch = item.assignedAt === undefined ? undefined : at(item.assignedAt)
+    const restoredEpoch = item.restoredAt === undefined ? undefined : at(item.restoredAt)
+    return [item.key, {
+      ...item,
+      registeredAt,
+      registered: moscowTime(registeredAt),
+      dueAt,
+      due: dueAt === null ? null : moscowTime(dueAt),
+      assignedEpoch,
+      assignedAt: assignedEpoch === undefined ? undefined : moscowTime(assignedEpoch),
+      restoredEpoch,
+      restoredAt: restoredEpoch === undefined ? undefined : moscowTime(restoredEpoch),
+    }]
+  }))
+  const revisions: Record<string, CardRevision[]> = Object.fromEntries(Array.from(incidentRevisions, ([key, versions]) => [
+    key,
+    versions.map(({observedAt, changedAt, values}) => ({
+      observedAt: iso(observedAt),
+      changedAt: changedAt === undefined ? undefined : iso(changedAt),
+      values: {...values, due: typeof values.due === 'string' ? iso(values.due) : values.due},
+    })),
+  ]))
+  const events = initialEvents.map((event) => {
+    const stamp = at(event.time)
+    return {...event, at: stamp, time: moscowTime(stamp)}
+  })
+  return {records, revisions, events}
+}
+
+// Store only deviations in SQLite. Give each mock instance a common real-time
+// anchor for its sample cards, events and revisions when materializing the reply.
+let cached: {started: number; fixture: ReturnType<typeof makeVolumeFixture>} | undefined
+export function volumeFixture(started: number): ReturnType<typeof makeVolumeFixture> {
+  if (cached?.started !== started) cached = {started, fixture: makeVolumeFixture(started)}
+  return cached.fixture
+}

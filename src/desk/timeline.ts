@@ -1,41 +1,92 @@
-import {incidentRevisions, initialEvents, type Incident} from '../demoData.ts'
+import type {DashboardHistoryEvent} from '../entities/incident/model/dashboard-contract.ts'
 import {cardChanges, historyFields, type TrackedField} from '../incidentHistory.ts'
-import {fullTime, priorityNames, standNow, type Desk} from './types.ts'
-import {registrationTime} from './order.ts'
+import {fullTime, itsmStateLabels, priorityNames, type Desk, type Incident, type ItsmState} from './types.ts'
+
+export function parseHistoryTime(value: string | null | undefined): number | undefined {
+  if (!value?.includes('T')) return undefined
+  const at = Date.parse(value)
+  return Number.isFinite(at) ? at : undefined
+}
 
 export function historyValue(field: TrackedField, value: string | null | undefined) {
   if (value === undefined) return 'Нет сведений'
   if (value === null) return 'Не задано'
-  if (field === 'due' && value.includes('T')) return fullTime(Date.parse(value)) + ' МСК'
+  if (field === 'due') {
+    const at = parseHistoryTime(value)
+    if (at !== undefined) return fullTime(at) + ' МСК'
+  }
   if (field === 'priority') return priorityNames[Number(value) - 1] ?? value
+  if (field === 'state' && Object.hasOwn(itsmStateLabels, value)) return itsmStateLabels[value as ItsmState]
   return value
 }
 
-export function cardTimeline(d: Desk, item: Incident) {
-  const absolute = (stamp: string, observed = false) => {
-    if (!stamp.includes('T')) return Date.parse('2026-11-21T' + stamp + ':00+03:00')
-    const at = Date.parse(stamp)
-    return observed ? standNow(d, at) : at
+const apiHistoryFields: Readonly<Partial<Record<string, TrackedField>>> = {
+  stateEnum: 'state',
+  assignedGroupName: 'team',
+  assignedEmployee: 'assignee',
+  priorityId: 'priority',
+  deadline: 'due',
+  solution: 'solution',
+}
+const apiHistoryLabels = {
+  ADDED: 'Карточка появилась в источнике',
+  UPDATED: 'Карточка обновлена',
+  MISSING: 'Карточка отсутствует в снимке источника',
+  RETURNED: 'Карточка снова появилась в снимке источника',
+}
+
+function stringValue(value: unknown): string | null | undefined {
+  if (value === null) return null
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined
+}
+
+export function apiHistoryFact(event: DashboardHistoryEvent) {
+  const changedAt = parseHistoryTime(event.sourceTime)
+  const observedAt = parseHistoryTime(event.observedAt)
+  return {
+    id: event.eventSeq,
+    label: apiHistoryLabels[event.changeKind],
+    changedAt,
+    observedAt,
+    at: changedAt ?? observedAt,
+    changes: event.changeKind === 'UPDATED' ? event.fields.flatMap(({field: key, previous, current}) => {
+      const field = Object.hasOwn(apiHistoryFields, key) ? apiHistoryFields[key] : undefined
+      const before = stringValue(previous)
+      const after = stringValue(current)
+      return field && before !== after ? [{field, before, after}] : []
+    }) : [],
   }
-  const lines = [{at: registrationTime(item), source: 'ITSM', text: 'Регистрация инцидента'}]
-  const record = (at: number, source: string, text: string) => lines.push({at: standNow(d, at), source, text})
-  const revisions =
-    d.revisions[item.key] ?? (d.mode === 'volume' ? incidentRevisions.get(item.key) : undefined) ?? []
+}
+
+interface TimelineEntry {
+  at: number
+  source: string
+  text: string
+}
+
+export function cardTimeline(d: Desk, item: Incident, history?: readonly DashboardHistoryEvent[]): TimelineEntry[] {
+  const lines: TimelineEntry[] = []
+  const record = (at: number | undefined, source: string, text: string) => {
+    if (at !== undefined && Number.isFinite(at)) lines.push({at, source, text})
+  }
+  record(item.registeredAt, 'ITSM', 'Регистрация инцидента')
+  record(item.restoredEpoch, 'ITSM', 'Завершение инцидента')
+  const fieldChanges = (changes: ReturnType<typeof apiHistoryFact>['changes']) => changes
+    .map((c) => historyFields[c.field] + ': ' + historyValue(c.field, c.before) + ' → ' + historyValue(c.field, c.after))
+    .join(' · ')
+  for (const event of history ?? []) {
+    if (event.incidentId !== item.id) continue
+    const fact = apiHistoryFact(event)
+    record(fact.at, fact.changedAt === undefined ? 'Журнал ITSM' : 'ITSM', fieldChanges(fact.changes) || fact.label)
+  }
+  const revisions = history === undefined ? d.revisions[item.key] ?? [] : []
   for (const v of cardChanges(revisions)) {
-    lines.push({
-      at: absolute(v.changedAt ?? v.observedAt, !v.changedAt),
-      source: 'ITSM',
-      text: v.changes
-        .map((c) => historyFields[c.field] + ': ' + historyValue(c.field, c.before) + ' → ' + historyValue(c.field, c.after))
-        .join(' · '),
-    })
+    record(parseHistoryTime(v.changedAt) ?? parseHistoryTime(v.observedAt), 'ITSM', fieldChanges(v.changes))
   }
-  for (const e of d.events.concat(d.mode === 'volume' ? initialEvents : []))
-    if (e.key === item.key) {
-      lines.push({at: e.at ?? absolute(e.time), source: 'Журнал смены', text: e.change})
-    }
+  for (const e of d.events)
+    if (e.key === item.key) record(e.at, 'Журнал смены', e.change)
   for (const signal of d.signals)
-    if (signal.key === item.key && signal.acknowledged)
+    if (signal.key === item.key && signal.acknowledged !== undefined)
       record(
         signal.acknowledged,
         'Общий экран',
@@ -46,18 +97,12 @@ export function cardTimeline(d: Desk, item: Incident) {
       for (const a of t.attempts) {
         const who = d.people.find((p) => p.id === a.person)?.name ?? a.person
         record(a.assigned, 'Координация', who + ' · назначена внутренняя задача')
-        if (a.accepted) record(a.accepted, 'Координация', who + ' · принял в работу')
-        if (a.ended) record(a.ended, 'Координация', who + ' · ' + a.reason)
+        record(a.accepted, 'Координация', who + ' · принял в работу')
+        record(a.ended, 'Координация', who + ' · ' + (a.reason ?? 'назначение завершено'))
       }
   const w = d.work[item.key]
   for (const n of w?.notes ?? [])
     record(n.at, n.author ?? 'Журнал смены', n.kind + ': ' + n.text + ' · ответственный: ' + n.owner)
   for (const e of w?.room?.timeline ?? []) record(e.at, 'Emergency Room', e.who + ' · ' + e.text)
-  for (const m of w?.room?.members ?? [])
-    if (!w?.room?.timeline?.some((e) => e.who === m.role)) {
-      lines.push({at: absolute(m.invited), source: 'Emergency Room', text: m.role + ' · приглашение'})
-      if (m.joined) lines.push({at: absolute(m.joined), source: 'МТС Линк', text: m.role + ' · подключился'})
-      if (m.left) lines.push({at: absolute(m.left), source: 'МТС Линк', text: m.role + ' · вышел'})
-    }
   return lines.sort((a, b) => b.at - a.at)
 }

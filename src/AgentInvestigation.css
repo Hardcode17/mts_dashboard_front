@@ -1,44 +1,28 @@
-/* A native disclosure groups its open children into one layout box. */
-.agent-diagnostics {
-  display: block;
-  container-type: inline-size;
-}
-.agent-diagnostics > summary {
-  cursor: pointer;
-}
-.agent-diagnostic-groups {
-  display: grid;
-  grid-template-columns: minmax(0, 32rem) minmax(0, 24rem);
-  gap: var(--g-spacing-6) var(--g-spacing-8);
-}
-.agent-diagnostic-section, .agent-outages {
-  display: grid;
+.agent-investigation {
   min-width: 0;
-  align-content: start;
-  gap: var(--g-spacing-3);
+  overflow-wrap: anywhere;
 }
-.agent-outages { justify-items: start; }
-.agent-intervals {
+
+.agent-investigation > a {
+  align-self: flex-start;
+}
+
+.agent-investigation :is(h1, h2, h3, p) {
+  margin: 0;
+}
+
+.agent-investigation-panels {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--g-spacing-3);
+  gap: var(--g-spacing-4);
 }
-.agent-diagnostic-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--g-spacing-3);
-  border-block-start: 1px solid var(--mcc-hairline);
-  padding-block-start: var(--g-spacing-4);
+
+.agent-card-text {
+  white-space: pre-wrap;
 }
-.incident-evidence { overflow-wrap: anywhere; }
-.agent-load-field { width: min(100%, 20rem); }
-.agent-source-content, .agent-finding { display: grid; min-width: 0; gap: var(--g-spacing-2); }
-.agent-source-content { justify-items: start; padding-block-start: var(--g-spacing-2); }
-.agent-source-content .agent-record { margin: 0; }
-@container (max-width: 43rem) {
-  .agent-diagnostic-groups { grid-template-columns: minmax(0, 1fr); }
-}
-@container (max-width: 25rem) {
-  .agent-intervals { grid-template-columns: minmax(0, 1fr); }
+
+@media (max-width: 48rem) {
+  .agent-investigation-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

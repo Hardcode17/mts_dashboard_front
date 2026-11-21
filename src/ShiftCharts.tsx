@@ -1,9 +1,8 @@
 import {useMemo, useState} from 'react'
 import {Chart, type ChartData} from '@gravity-ui/charts'
 import {Button, Card, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
-import type {Incident} from './demoData'
 import {useWorkspace} from './desk/context'
-import {moscowTime, standNow} from './desk/types'
+import {moscowTime, standNow, type Incident} from './desk/types'
 import {deadlineDistribution, incidentTrend, type TrendPeriod} from './shiftMetrics'
 import './ShiftCharts.css'
 

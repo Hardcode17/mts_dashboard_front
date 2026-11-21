@@ -1,6 +1,6 @@
 import {useMemo, useState} from 'react'
 import {Button, Card, Checkbox, Flex, Label, Link, Select, Text, TextArea, TextInput} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace, useRelated} from './context'
 import {dueInstant, emptyWork, fullTime, priorityNames} from './types'
 import {cardTimeline} from './timeline'

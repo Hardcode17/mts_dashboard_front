@@ -1,0 +1,61 @@
+[
+  {
+    "id": "INC000073000001",
+    "sysId": "73000001",
+    "header": "KAN-73: Критический сбой без срока",
+    "description": "Тестовая карточка из локального ITSM.",
+    "productName": "KAN-73 · Заказы",
+    "service": "kan73-checkout",
+    "serviceType": "Клиентский",
+    "stateEnum": "Assigned",
+    "state": "Назначен",
+    "priorityId": 4,
+    "submitDate": "2026-01-01T09:00:00Z",
+    "deadline": null,
+    "completionDate": null,
+    "solution": null,
+    "assignedGroupName": "КЦ ИТ Координаторы Массовых Инцидентов"
+  },
+  {
+    "id": "INC000073000002",
+    "sysId": "73000002",
+    "header": "KAN-73: Высокий приоритет",
+    "productName": "KAN-73 · Заказы",
+    "stateEnum": "WorkInProgress",
+    "state": "Выполняется",
+    "priorityId": 3,
+    "submitDate": "2026-01-01T09:01:00Z",
+    "deadline": "2026-01-01T10:01:00Z",
+    "completionDate": null,
+    "solution": null,
+    "assignedGroupName": "KAN-73 · Поддержка"
+  },
+  {
+    "id": "INC000073000003",
+    "sysId": "73000003",
+    "header": "KAN-73: Исследование на координаторах",
+    "productName": "KAN-73 · Заказы",
+    "stateEnum": "Research",
+    "state": "Исследование ситуации",
+    "priorityId": 3,
+    "submitDate": "2026-01-01T09:02:00Z",
+    "deadline": null,
+    "completionDate": "2026-01-01T10:02:00Z",
+    "solution": "Тестовое временное решение.",
+    "assignedGroupName": "КЦ ИТ Координаторы Массовых Инцидентов"
+  },
+  {
+    "id": "INC000073000004",
+    "sysId": "73000004",
+    "header": "KAN-73: Повторное открытие критического сбоя",
+    "productName": "KAN-73 · Заказы",
+    "stateEnum": "Resolved",
+    "state": "Решен",
+    "priorityId": 4,
+    "submitDate": "2026-01-01T09:03:00Z",
+    "deadline": null,
+    "completionDate": "2026-01-01T10:03:00Z",
+    "solution": "Тестовое временное решение.",
+    "assignedGroupName": "KAN-73 · Поддержка"
+  }
+]

@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from 'react'
 import {Button, Dialog, Flex, Label, Link, Loader, Select, Text, TextArea, TextInput} from '@gravity-ui/uikit'
-import type {Incident} from '../demoData'
+import type {Incident} from './types'
 import {useWorkspace} from './context'
 import {itsmEnumForState, itsmStateLabels, type ItsmState} from './types'
 import type {OfficialChanges} from './official'
@@ -28,7 +28,7 @@ type SaveState =
  * Официальное назначение в карточке инцидента (KAN-12): координатор выбирает
  * исполнителя из справочника ITSM, меняет группу и статус. Отправка идёт через
  * бэкенд дашборда (PATCH /api/dashboard/incidents/{id}); подтверждённое
- * состояние всегда приходит ответом сервера, при отказе показ откатывается.
+ * состояние всегда приходит ответом сервера, при отказе карточка не меняется.
  */
 export function OfficialAssignment({incident}: {incident: Incident}) {
   const {directory, directoryError, loadUsers, patchIncident} = useWorkspace()
@@ -44,10 +44,12 @@ export function OfficialAssignment({incident}: {incident: Incident}) {
   }, [loadUsers])
   const currentEnum = itsmEnumForState(incident.state)
   const currentLogin = useMemo(
-    () => (incident.assignee ? directory?.find((user) => user.name === incident.assignee)?.login : undefined),
-    [directory, incident.assignee],
+    () => incident.assignedEmployeeLogin !== undefined
+      ? incident.assignedEmployeeLogin ?? ''
+      : directory?.find((user) => user.name === incident.assignee)?.login ?? '',
+    [directory, incident.assignedEmployeeLogin, incident.assignee],
   )
-  const employee = employeeChoice ?? currentLogin ?? ''
+  const employee = employeeChoice ?? currentLogin
   const userOptions = useMemo(
     () => [
       {value: '', content: 'Не назначен'},
@@ -217,7 +219,7 @@ export function OfficialAssignment({incident}: {incident: Incident}) {
         )}
         {save?.kind === 'failed' && (
           <Text role="alert" color="danger">
-            {save.error} Карточка возвращена к последнему подтверждённому состоянию — исправьте значения и отправьте
+            {save.error} Карточка не изменилась — исправьте значения и отправьте
             снова.
           </Text>
         )}

@@ -13,8 +13,7 @@ import {
   TextInput,
 } from '@gravity-ui/uikit'
 import {useWorkspace} from './context'
-import {channels, fullTime, standNow, type Attempt, type Channel, type Notice} from './types'
-import type {Incident} from '../demoData'
+import {channels, fullTime, standNow, type Attempt, type Channel, type Incident, type Notice} from './types'
 
 export function ChannelPicker({
   value,

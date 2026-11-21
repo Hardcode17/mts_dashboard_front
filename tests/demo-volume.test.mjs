@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
-import {initialIncidents, initialEvents, additionalIncidents} from '../src/demoData.ts'
+import {initialIncidents, initialEvents, additionalIncidents} from '../mock/demoData.ts'
 
 test('the shift snapshot has unique cards and a linked event history in reverse time order', () => {
   assert.equal(initialIncidents.length, 3600)

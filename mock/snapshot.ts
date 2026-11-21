@@ -1,5 +1,4 @@
-import type {Incident} from '../src/demoData.ts'
-import {coordinatorGroup, itsmStateLabels, moscowTime} from '../src/desk/types.ts'
+import {coordinatorGroup, itsmStateLabels, moscowTime, type Incident} from '../src/desk/types.ts'
 export function parseSnapshot(raw: unknown): Incident[] {
   if (!Array.isArray(raw)) throw Error('Ожидается массив карточек ITSM.')
   const ids = new Set<string>()

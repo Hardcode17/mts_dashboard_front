@@ -1,15 +1,20 @@
 import {lazy, Suspense, useEffect, useMemo, useRef, useState} from 'react'
-import {Button, Card, Dialog, Flex, Label, Link, Loader, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
-import {initialEvents, initialIncidents} from './demoData'
+import {Button, Card, Dialog, Flex, Label, Link, Loader, Text, getConfig} from '@gravity-ui/uikit'
 import {correlationIndex,similarIncidents} from './desk/correlation'
 import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
 import {useDesk} from './desk/useDesk'
+import {workspaceIncidents} from './desk/records'
 import {QuickCard} from './desk/QuickCard'
 import {ShiftDesk} from './desk/ShiftDesk'
 import {OfficialCard,Meeting} from './desk/CardWork'
-import {fullTime,standNow,moscowTime} from './desk/types'
+import {fullTime,moscowTime} from './desk/types'
 import './desk/desk.css'
 import {Overview} from './Overview'
+import {IncidentApiRoute} from './features/incidents/ui/IncidentApiRoute'
+import {useApiIncident} from './features/incidents/model/useApiIncident'
+import {snapshotStatusMessages} from './features/incidents/ui/snapshotStatusMessages'
+import {DashboardAccount} from './features/auth/DashboardAuth'
+import {usesRealBackend} from './shared/api/mode'
 import mtsSymbol from './assets/mts-symbol.svg'
 import './App.css'
 
@@ -56,15 +61,32 @@ function useDashboardLocation(mode: string) {
   return route
 }
 
-type ThemeProps = {theme:'light'|'dark';changeTheme:(value:'light'|'dark')=>void}
+type ThemeProps = {theme:'light'|'dark';changeTheme:(value:'light'|'dark')=>void;onOpenMonitor:()=>void}
 export default function App(props:ThemeProps){
+  const [pathname, setPathname] = useState(() => window.location.pathname)
+  useEffect(() => {
+    const updatePath = () => setPathname(window.location.pathname)
+    window.addEventListener('popstate', updatePath)
+    return () => window.removeEventListener('popstate', updatePath)
+  }, [])
+
+  const match = pathname.match(/^\/incidents\/([^/]+)\/?$/)
+  if (match) {
+    return <IncidentApiRoute key={match[1]} number={decodeURIComponent(match[1])} />
+  }
+
+  return <DeskApplication {...props} />
+}
+
+function DeskApplication(props:ThemeProps){
   const client=useDesk()
   if(!client.desk)return <main className="workspace"><Card className="mcc-glass incident-panel"><Text as="h1" variant="header-2">Рабочее место MCC</Text>
-    {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button></>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
+    {client.error?<><Text role="alert">{client.error}</Text><Button onClick={()=>void client.refresh()}>Повторить подключение</Button>
+      {client.mode === 'api' && !usesRealBackend && <Button onClick={() => client.source('volume')}>Большая смена</Button>}</>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
   return <DeskContext.Provider value={{...client,desk:client.desk}}><Workspace key={client.mode} {...props}/></DeskContext.Provider>
 }
-function Workspace({theme,changeTheme}:ThemeProps){
-  const {desk,person,checked,now,error,actionError,clearError,refresh,act,busy}=useWorkspace()
+function Workspace({theme,changeTheme,onOpenMonitor}:ThemeProps){
+  const {desk,person,checked,now,error,actionError,clearError,refresh,act,busy,mode}=useWorkspace()
   const [displayed,setDisplayed]=useState<string[]>([])
   const route = useDashboardLocation(desk.mode)
   const {hash, listing} = route
@@ -78,49 +100,59 @@ function Workspace({theme,changeTheme}:ThemeProps){
   const queue = listPath.split('/')[1]
   const activeQueue = listPath === 'events' ? 'events' :
     queue === 'assigned' || queue === 'high' || queue === 'research' || queue === 'all' ? queue : 'critical'
-  const incidents=useMemo(()=>{
-    if(desk.mode==='case')return Object.values(desk.records)
-    const ids=new Set(initialIncidents.map(i=>i.key))
-    return [...initialIncidents.map(i=>desk.records[i.key]??i),...Object.values(desk.records).filter(i=>!ids.has(i.key))]
-  },[desk.records,desk.mode])
+  const incidents = useMemo(() => workspaceIncidents(desk.records), [desk.records])
+  const incidentsByKey = useMemo(() => new Map(incidents.map(incident => [incident.key, incident])), [incidents])
   const index=useMemo(()=>correlationIndex(incidents),[incidents])
-  const events=useMemo(()=>desk.mode==='case'?desk.events:[...desk.events,...initialEvents],[desk.events,desk.mode])
-  const selected=incidents.find(i=>i.key===key||i.id===key)
-  const showDetails=selected&&isCardRoute(hash)
+  const events=desk.events
+  const cardRoute=isCardRoute(hash)
+  const selectedSummary=incidentsByKey.get(key) ?? incidents.find(i=>i.id===key)
+  const detailId = mode === 'api' && cardRoute
+    ? selectedSummary?.id ?? (/^INC[0-9]{6,18}$/i.test(key) ? key.toUpperCase() : undefined)
+    : undefined
+  const detail = useApiIncident(detailId, desk.version)
+  const selected = selectedSummary?.itsmUrl ? selectedSummary
+    : (detail.record?.id === detailId ? detail.record : undefined) ?? selectedSummary
+  const showDetails=selected&&cardRoute
   const query=new URLSearchParams(hash.split('?')[1])
   const evidenceReport=selected&&view==='evidence'?desk.work[selected.key]?.reports.find(r=>r.id===query.get('run')):undefined
   const evidenceIndex=query.get('source')
   const evidence=evidenceIndex && /^\d+$/.test(evidenceIndex) ? evidenceReport?.analysis?.evidence[Number(evidenceIndex)] : undefined
   const analysisHref = selected && evidenceReport && '#investigation/'+selected.key+'?run='+encodeURIComponent(evidenceReport.id)+'&dataset='+desk.mode
   const isDesk=view==='desk'
-  const pending=useMemo(()=>desk.signals.filter(s=>!s.acknowledged),[desk.signals])
-  const visible=displayed.filter(id=>pending.some(s=>s.id===id))
-  const shown=visible.map(id=>incidents.find(i=>i.key===pending.find(s=>s.id===id)?.key)).filter(i=>i!==undefined)
-  const matched=useMemo(()=>new Map(displayed.flatMap(id=>{
-    const signal=desk.signals.find(s=>s.id===id)
-    const card=signal&&incidents.find(i=>i.key===signal.key)
-    const match=card&&similarIncidents(index,card)[0]
-    return card&&match?[[card.key,match.incident.id+' · '+match.reasons[0]] as const]:[]
-  })),[displayed,desk.signals,incidents,index])
+  const pending=useMemo(()=>desk.signals.flatMap(signal=>{
+    const incident=incidentsByKey.get(signal.key)
+    return signal.acknowledged === undefined && incident
+      ? [{id:signal.id, incident: {...incident, title: signal.title || incident.title || incident.id}}]
+      : []
+  }),[desk.signals,incidentsByKey])
+  const shown=useMemo(()=>pending.filter(({id})=>displayed.includes(id)),[pending,displayed])
+  const matched=useMemo(()=>new Map(shown.flatMap(({incident})=>{
+    const match=similarIncidents(index,incident)[0]
+    return match?[[incident.key,match.incident.id+' · '+match.reasons[0]] as const]:[]
+  })),[shown,index])
   const open=shown.length>0,extra=pending.length-shown.length
   useEffect(()=>{
-    if(visible.length||!pending.length)return
+    if(shown.length||!pending.length)return
     const timer=setTimeout(()=>setDisplayed(pending.slice(0,5).map(s=>s.id)),Math.max(0,desk.quietUntil-Date.now()))
     return()=>clearTimeout(timer)
-  },[pending,visible.length,desk.quietUntil])
-  const recent=desk.events[0]
+  },[pending,shown.length,desk.quietUntil])
+  const recent=events[0]
+  const recentIncident=recent ? incidentsByKey.get(recent.key) : undefined
+  const sourceIssue = error || desk.sourceError
+  const awaitingPublication = desk.apiBeforeFirstSuccess && !sourceIssue
+  const snapshotCopy = snapshotStatusMessages[getConfig().lang === 'ru' ? 'ru' : 'en']
   const actor=desk.people.find(p=>p.id===person)??desk.people[0]
-  const myTask=desk.tasks.find(t=>!t.finished&&t.attempts.at(-1)?.person===actor.id&&!t.attempts.at(-1)?.ended&&!t.attempts.at(-1)?.accepted)
+  const myTask=actor&&desk.tasks.find(t=>!t.finished&&t.attempts.at(-1)?.person===actor.id&&!t.attempts.at(-1)?.ended&&!t.attempts.at(-1)?.accepted)
   useEffect(() => {
-    if (view !== 'drawer') window.scrollTo(0, 0)
+    if (view !== 'drawer' && view !== 'queue') window.scrollTo(0, 0)
   }, [view, key])
   useEffect(() => {
-    document.title = (showDetails ? selected.title : isDesk ? 'Моя смена' : listTitle) + ' · MCC'
+    document.title = (showDetails ? selected.title || selected.id : isDesk ? 'Моя смена' : listTitle) + ' · MCC'
   }, [view, key, showDetails, selected, isDesk, listTitle])
 
   async function acknowledge() {
-    if (await act({type:'ack', ids:visible})) {
-      const cards = [...new Map(shown.map(card => [card.key, card])).values()]
+    if (shown.length && await act({type:'ack', ids:shown.map(({id})=>id)})) {
+      const cards = [...new Map(shown.map(({incident}) => [incident.key, incident])).values()]
       setReceipt({route, cards:cards.map(({key,id,title}) => ({key,id,title}))})
       setDisplayed([])
     }
@@ -134,36 +166,50 @@ function Workspace({theme,changeTheme}:ThemeProps){
           <nav className="primary-nav" aria-label="Разделы дашборда">
             <Link href="#overview" aria-current={summary && !showDetails ? 'page' : undefined}>Сводка</Link>
             <Link href="#queue/critical" aria-current={listPath.startsWith('queue/') && !showDetails ? 'page' : undefined}>Очереди</Link>
-            <Link href="#desk/tasks" aria-current={isDesk?'page':undefined}
+            <Link href={mode === 'api' ? '#desk/source' : '#desk/tasks'} aria-current={isDesk?'page':undefined}
               aria-label={myTask?'Моя смена — одна задача ожидает принятия':undefined}
               title={myTask?'Одна задача ожидает принятия':undefined}>Моя смена{myTask&&<span className="nav-task-count" aria-hidden="true">1</span>}</Link>
             <Link href="#events" aria-current={listPath === 'events' && !showDetails ? 'page' : undefined}>Журнал</Link>
           </nav>
           <Flex alignItems="center" gap="spacing-3" className="snapshot">
-            <Text className="snapshot-clock" color="secondary" variant="body-1">{moscowTime(standNow(desk,now))} МСК</Text>
-            <SegmentedRadioGroup<'light' | 'dark'> aria-label="Тема оформления" value={theme} onUpdate={changeTheme} size="m">
-              <SegmentedRadioGroup.Option value="light">Светлая</SegmentedRadioGroup.Option>
-              <SegmentedRadioGroup.Option value="dark">Тёмная</SegmentedRadioGroup.Option>
-            </SegmentedRadioGroup>
+            <DashboardAccount />
+            <Text className="snapshot-clock" color="secondary" variant="body-1">{moscowTime(now)} МСК</Text>
+            <Button className="monitor-entry" view="action" size="m" onClick={onOpenMonitor} title="Полноэкранный монитор для комнаты координаторов">Монитор</Button>
+            <button
+              type="button"
+              className="theme-switch"
+              role="switch"
+              aria-label="Тёмная тема"
+              aria-checked={theme === 'dark'}
+              title={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+              onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              <span className="theme-switch-thumb" aria-hidden="true"/>
+              <span className="theme-switch-icon theme-switch-sun" aria-hidden="true"/>
+              <span className="theme-switch-icon theme-switch-moon" aria-hidden="true"/>
+            </button>
           </Flex>
         </Flex>
       </header>
       <main className={'workspace' + (isDesk?' workspace-shift':'') + (wall && !showDetails ? ' wall' : '')}>
         <div className="source-status" aria-label="Состояние данных" role="group">
-          <span className="source-indicator" data-stale={Boolean(error||desk.sourceError)} aria-hidden="true" />
-          <Text variant="body-1">{desk.mode==='case'?'Снимок ITSM':'Данные демосмены'}</Text>
+          <span className="source-indicator" data-stale={Boolean(sourceIssue)} aria-hidden="true" />
+          <Text variant="body-1">{mode === 'api' ? 'API рабочего места MCC' : desk.mode==='case'?'Снимок ITSM':'Данные демосмены'}</Text>
           <Text color="secondary" variant="body-1">{checked
             ? <>Последняя проверка <time dateTime={new Date(checked).toISOString()} title={fullTime(checked)+' МСК'}>{moscowTime(checked)} МСК</time></>
             : 'Ожидаем первую проверку'}</Text>
-          {(error||desk.sourceError)&&<>
-            <Text color="danger" variant="body-1" role="alert"><strong>Устаревшие данные</strong> · {error||desk.sourceError}</Text>
+          {awaitingPublication && <Text color="secondary" variant="body-1" role="status">{snapshotCopy.awaitingPublication}</Text>}
+          {sourceIssue && <Text color="danger" variant="body-1" role="alert">
+            <strong>{desk.apiBeforeFirstSuccess ? snapshotCopy.sourceUnavailable : 'Устаревшие данные'}</strong> · {sourceIssue}
+          </Text>}
+          {(sourceIssue || awaitingPublication) &&
             <Button size="s" view="outlined" onClick={()=>void refresh()}>Проверить снова</Button>
-          </>}
+          }
         </div>
         {actionError&&<div className="desk-alert" role="alert"><Text>{actionError}</Text><Button size="s" onClick={clearError}>Закрыть</Button></div>}
 
         {pending.length>0 && !open && <div className="pending-signals" role="status">
-            <Text variant="subheader-1">Ожидают подтверждения: {pending.length} · {pending.slice(0,3).map(s=>incidents.find(i=>i.key===s.key)?.id).join(', ')}</Text>
+            <Text variant="subheader-1">Ожидают подтверждения: {pending.length} · {pending.slice(0,3).map(({incident})=>incident.id).join(', ')}</Text>
             <Button size="m" onClick={() => setDisplayed(pending.slice(0,5).map(s=>s.id))}>Посмотреть</Button>
           </div>}
         {receiptVisible && !open && <div className="change-strip signal-receipt" role="status">
@@ -178,7 +224,13 @@ function Workspace({theme,changeTheme}:ThemeProps){
           })}
           <Button size="s" view="flat-secondary" onClick={()=>setReceipt(null)}>Скрыть</Button>
         </div>}
-        {recent&&!(receiptVisible && ['new','assign'].includes(recent.kind) && receipt.cards.some(card=>card.key===recent.key))&&<div className="change-strip"><Label theme={recent.kind==='restore'?'success':'info'}>{({new:'Новый критический',assign:'Новое назначение',due:'Срок близко',restore:'Сбой устранён'})[recent.kind]}</Label> <Link href={'#incident/'+recent.key}>{incidents.find(i=>i.key===recent.key)?.id} · {recent.change}</Link></div>}
+        {recent&&!(receiptVisible && ['new','assign'].includes(recent.kind) && receipt.cards.some(card=>card.key===recent.key))&&<div className="change-strip">
+          <Label theme={mode === 'api' ? 'normal' : recent.kind==='restore'?'success':'info'}>{mode === 'api' ? 'Последняя активность' : ({new:'Новый критический',assign:'Новое назначение',due:'Срок близко',restore:'Сбой устранён'})[recent.kind]}</Label>
+          {recentIncident ? <Link href={'#incident/'+recent.key}>{recentIncident.id} · {recent.change}</Link> : <Text>{recent.key} · {recent.change}</Text>}
+        </div>}
+        {detailId && detail.error && selected && <Text role="status" color="secondary">
+          {detail.record ? 'Не удалось обновить карточку. Показаны последние загруженные данные.' : 'Подробности карточки недоступны. Показаны данные из списка.'}
+        </Text>}
         {showDetails&&view==='drawer'&&!open&&<QuickCard item={selected} back={listing}/>}
         {showDetails&&view==='evidence'&&<Card className="mcc-glass incident-panel"><Link href={analysisHref || '#incident/'+selected.key}>{analysisHref?'← К сохранённому разбору':'← К карточке'} {selected.id}</Link><Text as="h1" variant="header-2">{evidence?.source??'Наблюдение недоступно'}</Text>
           {evidence&&evidenceReport&&<><Text>{evidence.finding}</Text><Text variant="code-1" className="report-text">{evidence.record}</Text><Text color="secondary">Сохранено {fullTime(evidenceReport.at)} · запуск №{evidenceReport.id} · мок источника</Text></>}</Card>}
@@ -188,19 +240,23 @@ function Workspace({theme,changeTheme}:ThemeProps){
         {showDetails&&(view==='incident'||view==='investigation')&&<Suspense fallback={<div role="status" aria-label="Загрузка карточки"><Loader /></div>}>
           <IncidentView key={selected.key} incident={selected} incidents={incidents} backHref={listing} investigating={view==='investigation'} tab={new URLSearchParams(hash.split('?')[1]).get('tab')}/>
         </Suspense>}
-        {isCardRoute(hash)&&!selected&&<Card className="incident-panel"><Text>Такого INC в выбранном источнике нет.</Text><Link href="#overview">Вернуться к сводке</Link></Card>}
-        {(!isCardRoute(hash)||view==='drawer')&&!isDesk&&<div>
+        {cardRoute&&!selected&&<Card className="incident-panel">
+          {detailId && !detail.error ? <div role="status" aria-label="Загрузка карточки"><Loader /></div> : <Text>{detail.error ?? 'Такого INC в выбранном источнике нет.'}</Text>}
+          <Link href="#overview">Вернуться к сводке</Link>
+        </Card>}
+        {(!cardRoute||view==='drawer')&&!isDesk&&<div>
           <div className="overview-heading">
             <div><Text as="h1" variant="display-3">{listTitle}</Text>
               <Text as="p" variant="body-2" color="secondary">Карточек в снимке: {incidents.length.toLocaleString('ru-RU')} · Событий: {events.length.toLocaleString('ru-RU')}</Text>
             </div>
             <Flex gap="spacing-2" wrap="wrap">
-              <Button size="l" view="outlined" disabled={busy} onClick={() => void act({type:'demo'})}>Демо: новый крит</Button>
               <Button size="l" view="action" href={wall ? '#queue/critical' : '#wall'}>{wall ? 'Вернуться на рабочее место' : 'На общий экран'}</Button>
             </Flex>
           </div>
           <Overview listingHash={listing} incidents={incidents} events={events} wall={wall} summary={summary} activeQueue={activeQueue} />
-          <footer className="overview-footer"><Text color="secondary" variant="caption-2">Демонстрационные данные · время стенда {moscowTime(standNow(desk,now))} МСК</Text>
+          <footer className="overview-footer"><Text color="secondary" variant="caption-2">{mode === 'api'
+            ? (desk.lastImport ? 'Опубликованный снимок · ' + fullTime(desk.lastImport) + ' МСК' : 'Снимок ещё не опубликован')
+            : 'Демонстрационные данные · ' + moscowTime(now) + ' МСК'}</Text>
             <Link href="#desk/source">Настроить источник</Link>
           </footer>
         </div>}
@@ -212,8 +268,8 @@ function Workspace({theme,changeTheme}:ThemeProps){
             <Text variant="subheader-1" className="signal-severity">⚠ Наивысший приоритет</Text>
             <Text as="h2" id="signal-title" variant="display-3">{shown.length > 1 ? 'Новые критические инциденты' : 'Новый критический инцидент'}</Text>
             <Text variant="body-2">Нажмите «Увидел», чтобы продолжить работу. Личную задачу координатор принимает в «Моей смене».</Text>
-            {shown.map((incident,index) => <Card className="signal-item" key={visible[index]} view="outlined">
-              <Text variant="code-1">{incident.id}</Text><Text as="h3" variant="header-1">{incident.title}</Text>
+            {shown.map(({id, incident}) => <Card className="signal-item" key={id} view="outlined">
+              <Text variant="code-1">{incident.id}</Text><Text as="h3" variant="header-1">{incident.title || incident.product}</Text>
               <dl className="signal-facts">
                 <div><dt>Продукт</dt><dd>{incident.product}</dd></div>
                 <div><dt>Срок решения</dt><dd>{incident.dueAt!=null ? fullTime(incident.dueAt)+' МСК' : incident.due ? incident.due+' МСК' : 'Не указан'}</dd></div>
@@ -224,7 +280,6 @@ function Workspace({theme,changeTheme}:ThemeProps){
             {extra > 0 && <Text role="status" variant="body-2">Поступило ещё: {extra}. Следующие события останутся неподтверждёнными.</Text>}
             <Flex gap="spacing-3" wrap="wrap">
               <Button view="action" size="xl" disabled={busy} onClick={()=>void acknowledge()}>Увидел{shown.length > 1 ? ' (' + shown.length + ')' : ''}</Button>
-              <Button className="signal-demo" view="flat" size="l" disabled={busy} onClick={() => void act({type:'demo'})}>Демо: ещё один крит</Button>
             </Flex>
           </div>
         </Dialog.Body>

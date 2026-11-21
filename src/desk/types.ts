@@ -1,5 +1,50 @@
-import type {Incident, ShiftEvent} from '../demoData.ts'
+import type {IncidentGroup} from '../entities/incident/model/api-types.ts'
 import type {CardRevision} from '../incidentHistory.ts'
+
+export interface Incident {
+  key: string
+  id: string
+  title: string
+  product: string
+  team: string
+  state: string
+  registered: string
+  due: string | null
+  priority: number
+  research: boolean
+  assignedAt?: string
+  restoredAt?: string
+  assignee?: string
+  assignedEmployeeLogin?: string | null
+  solution?: string
+  service?: string
+  serviceType?: string
+  description?: string
+  impact?: string
+  flags?: string[]
+  dueAt?: number | null
+  remainingSeconds?: number | null
+  overdue?: boolean
+  itsmUrl?: string
+  site?: string
+  specialists?: number
+  workMinutes?: number
+  restoredEpoch?: number
+  assignedEpoch?: number
+  registeredAt?: number
+  updatedAt?: number
+  absent?: boolean
+  groups?: IncidentGroup[]
+}
+
+export interface ShiftEvent {
+  at?: number
+  id: string
+  key: string
+  time: string
+  kind: 'new' | 'assign' | 'due' | 'restore'
+  change: string
+}
 
 export const channels = [
   'МТС Notifica',
@@ -85,6 +130,7 @@ export interface Signal {
   id: string
   key: string
   at: number
+  title?: string
   acknowledged?: number
 }
 export interface WorkNote {
@@ -112,8 +158,16 @@ export interface Room {
   timeline?: {at: number; who: string; text: string}[]
   fragments: {at: string; who: string; text: string}[]
 }
+export interface IncidentAnalysis {
+  evidence: {source: string; finding: string; record: string}[]
+  hypothesis: string | null
+  recipient: string
+  question: string
+  next: string
+  scenario?: 'payment' | 'auth'
+}
 export interface Report {
-  analysis?: ReturnType<typeof import('../agentDemo.ts').analyzeDemoIncident>
+  analysis?: IncidentAnalysis
   id: string
   at: number
   title: string
@@ -160,6 +214,13 @@ export interface Desk {
   lastImport: number
   lastChanges: {id: string; fields: string[]}[]
   demoCount: number
+  apiBeforeFirstSuccess?: boolean
+  apiCounts?: {
+    critical: number
+    coordinators: number
+    high: number
+    research: number
+  }
 }
 export type Command = {
   type:
@@ -222,11 +283,11 @@ export const fullTime = (date: number) =>
     dateStyle: 'short',
     timeStyle: 'medium',
   }).format(date)
-export function standNow(d: Pick<Desk, 'mode' | 'started'>, now: number) {
-  return d.mode === 'case' ? now : Date.UTC(2026, 10, 21, 9, 42) + now - d.started
+export function standNow(_desk: Pick<Desk, 'mode' | 'started'>, now: number): number {
+  return now
 }
-export function dueInstant(i: Incident) {
-  return i.dueAt !== undefined ? i.dueAt : i.due ? Date.parse('2026-11-21T' + i.due + ':00+03:00') : null
+export function dueInstant(i: Incident): number | null {
+  return i.dueAt ?? null
 }
 export function emptyWork(): CardWork {
   return {notes: [], links: [], reports: []}

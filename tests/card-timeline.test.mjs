@@ -2,7 +2,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {cardTimeline, historyValue} from '../src/desk/timeline.ts'
 import {createDesk, execute} from '../mock/engine.ts'
-import {initialIncidents} from '../src/demoData.ts'
+import {initialIncidents} from '../mock/demoData.ts'
 import {standNow} from '../src/desk/types.ts'
 
 test('the incident journal puts the ITSM edit and its detection on the stand clock exactly once', () => {

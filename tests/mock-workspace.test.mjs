@@ -201,14 +201,15 @@ test('analysis, transcript and handoff keep their sources; mock outages do not e
 
 test('queue order uses ITSM priority, deadline, registration and INC as stable tie breakers', async () => {
   const {incidentOrder} = await import('../src/desk/order.ts')
-  const common = {state: 'Назначен', priority: 3, registered: '10:00', due: '13:00'}
+  const absolute = value => Date.parse('2026-11-21T' + value + ':00+03:00')
+  const common = {state: 'Назначен', priority: 3, registeredAt: absolute('10:00'), dueAt: absolute('13:00')}
   const cases = [
     {...common, id: 'B'},
     {...common, id: 'A'},
-    {...common, id: 'C', registered: '09:00'},
-    {...common, id: 'D', due: null},
-    {...common, id: 'E', priority: 4, due: null},
-    {...common, id: 'F', due: '12:00'},
+    {...common, id: 'C', registeredAt: absolute('09:00')},
+    {...common, id: 'D', dueAt: null},
+    {...common, id: 'E', priority: 4, dueAt: null},
+    {...common, id: 'F', dueAt: absolute('12:00')},
   ]
   assert.deepEqual(
     cases.sort(incidentOrder).map((i) => i.id),

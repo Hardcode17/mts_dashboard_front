@@ -1,9 +1,8 @@
 import {useMemo, useState} from 'react'
 import {Button, Card, Flex, Link, Pagination, Select, Text, TextInput} from '@gravity-ui/uikit'
-import {type Incident, type ShiftEvent} from './demoData'
 import './EventStream.css'
 import {useWorkspace} from './desk/context'
-import {standNow,moscowTime} from './desk/types'
+import {standNow,moscowTime,type Incident,type ShiftEvent} from './desk/types'
 
 const eventKinds = {
   new: {label: 'Новый критический', symbol: '!'},

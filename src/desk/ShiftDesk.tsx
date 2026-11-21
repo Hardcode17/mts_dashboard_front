@@ -14,9 +14,9 @@ import {
   TextInput,
 } from '@gravity-ui/uikit'
 import {useWorkspace} from './context'
+import {usesRealBackend} from '../shared/api/mode'
 import {historyFields} from '../incidentHistory'
-import {fullTime, standNow, type Task} from './types'
-import type {Incident} from '../demoData'
+import {fullTime, standNow, type Incident, type Task} from './types'
 import {NotificationCenter} from './NotificationCenter'
 
 function TaskDetail({task, item, onHandoff}: {task: Task; item: Incident; onHandoff: (message: string) => void}) {
@@ -213,34 +213,47 @@ function SourceDesk() {
         <Text as="h2" variant="header-1">
           Источник карточек
         </Text>
-        <div className="mcc-field">
+        {!usesRealBackend && <div className="mcc-field">
           <label htmlFor="shift-dataset">Набор данных</label>
           <Select id="shift-dataset" width="max" value={[mode]}
             options={[
+              {value: 'api', content: 'API MCC · mock/backend'},
               {value: 'case', content: 'Кейс МТС · JSON'},
               {value: 'volume', content: 'Большая смена · 3600 INC'},
             ]}
-            onUpdate={([v]) => source(v === 'case' ? 'case' : 'volume')}
+            onUpdate={([v]) => source(v === 'case' || v === 'volume' ? v : 'api')}
           />
-        </div>
+        </div>}
         <div className="shift-source-status">
           <Text>{error || desk.sourceError || 'Опрос работает'}</Text>
           <Text color="secondary">Последняя проверка: {checked ? fullTime(checked) : 'ожидаем ответа'}</Text>
         </div>
         <Button onClick={() => void refresh()}>Обновить сейчас</Button>
-        <div className="shift-source-threshold">
+        {mode !== 'api' && <div className="shift-source-threshold">
           <div className="mcc-field">
             <label htmlFor="shift-sla-threshold">Порог предупреждения SLA, мин</label>
             <TextInput id="shift-sla-threshold" type="number" value={threshold} onUpdate={setThreshold} />
           </div>
           <Button onClick={() => void act({type: 'threshold', number: Number(threshold)})}>Сохранить порог</Button>
-        </div>
+        </div>}
       </Card>
       <Card className="mcc-glass incident-panel">
         <Text as="h2" variant="header-1">
-          {mode === 'case' ? 'Проверка снимка ITSM' : 'Большая смена'}
+          {mode === 'api' ? 'API рабочего места MCC' : mode === 'case' ? 'Проверка снимка ITSM' : 'Большая смена'}
         </Text>
-        {mode === 'case' ? (
+        {mode === 'api' ? (
+          <>
+            <Text>
+              Дашборд читает опубликованные инциденты через `GET /api/dashboard/incidents`
+              и свежесть снимка через `GET /api/snapshot/status`. Источник только
+              для чтения; действия маршрутизации остаются в отдельном демо-режиме.
+            </Text>
+            <Text color="secondary">
+              Карточка открывается по `/incidents/:id`; обновление выполняется
+              опросом API раз в 5 секунд.
+            </Text>
+          </>
+        ) : mode === 'case' ? (
           <>
             <Text>
               Источник:{' '}
@@ -316,6 +329,9 @@ function SourceDesk() {
   )
 }
 export function ShiftDesk({tab, incidents}: {tab: string | undefined; incidents: Incident[]}) {
+  const {mode} = useWorkspace()
+  if (mode === 'api') return <div className="shift-desk"><SourceDesk /></div>
+
   return (
     <div className="shift-desk">
       <nav className="desk-tabs" aria-label="Инструменты смены">

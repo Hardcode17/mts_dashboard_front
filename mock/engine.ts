@@ -1,4 +1,4 @@
-import {additionalIncidents, initialIncidents, incidentRevisions, type Incident} from '../src/demoData.ts'
+import {additionalIncidents, fixtureTime, volumeFixture} from './demoData.ts'
 import {
   active,
   channels,
@@ -7,33 +7,41 @@ import {
   emptyWork,
   moscowTime,
   onCoordinators,
-  standNow,
   states,
   type Desk,
+  type Incident,
   type Source,
   type Command,
   type Task,
   type Channel,
 } from '../src/desk/types.ts'
 import type {CardRevision, TrackedField} from '../src/incidentHistory.ts'
-import {analyzeDemoIncident} from '../src/agentDemo.ts'
+import {analyzeDemoIncident} from './agentDemo.ts'
 import {recoveryTrial, measures} from '../src/desk/recovery.ts'
 import {parseSnapshot} from './snapshot.ts'
 
-const base = new Map(initialIncidents.map((i) => [i.key, i]))
 export function lookup(d: Desk, key: string) {
-  return Object.hasOwn(d.records, key) ? d.records[key] : d.mode === 'volume' ? base.get(key) : undefined
+  if (Object.hasOwn(d.records, key)) return d.records[key]
+  if (d.mode === 'volume') {
+    const {records} = volumeFixture(d.started)
+    if (Object.hasOwn(records, key)) return records[key]
+  }
+  return undefined
 }
-export function items(d: Desk) {
-  return d.mode === 'case'
-    ? Object.values(d.records)
-    : [
-        ...initialIncidents.map((x) => d.records[x.key] ?? x),
-        ...Object.values(d.records).filter((x) => !base.has(x.key)),
-      ]
+export function items(d: Desk): Incident[] {
+  return Object.values(d.mode === 'volume' ? {...volumeFixture(d.started).records, ...d.records} : d.records)
+}
+export function standDesk(d: Desk): Desk {
+  if (d.mode === 'case') return d
+  const seed = volumeFixture(d.started)
+  return {
+    ...d,
+    records: {...seed.records, ...d.records},
+    revisions: {...seed.revisions, ...d.revisions},
+    events: [...d.events, ...seed.events].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)),
+  }
 }
 const uid = (d: Desk) => String(++d.seq)
-const time = (d: Desk, now: number) => moscowTime(standNow(d, now))
 function required(value: unknown, label: string) {
   if (typeof value !== 'string' || !value.trim() || value.length > 20000)
     throw Error('Проверьте поле «' + label + '».')
@@ -134,7 +142,7 @@ const values = (i: Incident): CardRevision['values'] => ({
   team: i.team,
   assignee: i.assignee ?? null,
   priority: String(i.priority),
-  due: i.dueAt != null ? new Date(i.dueAt).toISOString() : i.due,
+  due: i.dueAt != null ? new Date(i.dueAt).toISOString() : null,
   solution: i.solution ?? null,
 })
 function appendEvent(
@@ -145,7 +153,7 @@ function appendEvent(
   now: number,
 ) {
   const id = uid(d)
-  d.events.unshift({id: 'obs-' + id, at: standNow(d, now), key: i.key, time: time(d, now), kind, change})
+  d.events.unshift({id: 'obs-' + id, at: now, key: i.key, time: moscowTime(now), kind, change})
   if (kind === 'new') d.signals.push({id, key: i.key, at: now})
   deliveries(d, i.key, 'shift', change + ' · ' + i.id, now)
 }
@@ -162,8 +170,9 @@ export function applyCard(d: Desk, incoming: Incident, now: number) {
   const fields = (Object.keys(after) as TrackedField[]).filter((k) => before[k] !== after[k])
   const observedAt = new Date(now).toISOString()
   const history = (d.revisions[item.key] ??=
-    d.mode === 'volume' ? [...(incidentRevisions.get(item.key) ?? [])] : [])
-  if (old && !history.length) history.push({observedAt: old.registered, values: before})
+    d.mode === 'volume' ? [...(volumeFixture(d.started).revisions[item.key] ?? [])] : [])
+  if (old && !history.length)
+    history.push({observedAt: new Date(old.updatedAt ?? old.registeredAt ?? now).toISOString(), values: before})
   if (!old || !openCritical(item) || !old.due || old.due !== item.due) delete d.warnings[item.key]
   if (!old) history.push({observedAt, values: after})
   else if (fields.length) {
@@ -263,7 +272,7 @@ export function createDesk(mode: Source, now: number): Desk {
     demoCount: 0,
   }
   if (mode === 'volume') {
-    for (const i of initialIncidents) if (onCoordinators(i)) enqueue(d, i.key, now)
+    for (const i of Object.values(volumeFixture(now).records)) if (onCoordinators(i)) enqueue(d, i.key, now)
     const work = emptyWork()
     work.room = {
       id: 'ER-112',
@@ -295,6 +304,15 @@ export function createDesk(mode: Source, now: number): Desk {
         },
       ],
     }
+    work.room.timeline = work.room.members.flatMap(member => {
+      const events = [{at: fixtureTime(now, member.invited), who: member.role, text: 'Приглашение'}]
+      if (member.joined) events.push({at: fixtureTime(now, member.joined), who: member.role, text: 'Подключился'})
+      if (member.left) events.push({at: fixtureTime(now, member.left), who: member.role, text: 'Вышел'})
+      member.invited = moscowTime(events[0].at)
+      if (member.joined) member.joined = moscowTime(events[1].at)
+      if (member.left) member.left = moscowTime(events[events.length - 1].at)
+      return events
+    }).sort((a, b) => b.at - a.at)
     d.work.incident = work
     dispatchTasks(d, now)
   }
@@ -302,12 +320,11 @@ export function createDesk(mode: Source, now: number): Desk {
 }
 export function tickDesk(d: Desk, now: number) {
   let changed = dispatchTasks(d, now)
-  const stamp = standNow(d, now)
   for (const i of items(d)) {
     if (!active(i) || i.absent) continue
     const due = dueInstant(i)
     if (due === null) continue
-    const left = due - stamp,
+    const left = due - now,
       token = due + '/' + d.threshold
     if (left < 0 || left > d.threshold * 60000 || d.warnings[i.key] === token) continue
     d.warnings[i.key] = token
@@ -343,12 +360,12 @@ function patchOfficial(d: Desk, key: string, data: unknown, now: number, expecte
   }
   next.research = next.state === 'Исследование ситуации'
   next.restoredAt = ['Завершён', 'Закрыт', 'Исследование ситуации'].includes(next.state)
-    ? (i.restoredAt ?? time(d, now))
+    ? (i.restoredAt ?? moscowTime(now))
     : undefined
-  if (next.restoredAt && !i.restoredAt) next.restoredEpoch = standNow(d, now)
+  if (next.restoredAt && !i.restoredAt) next.restoredEpoch = now
   if (!next.restoredAt) next.restoredEpoch = undefined
-  if (next.team !== i.team || next.assignee !== i.assignee) next.assignedEpoch = standNow(d, now)
-  next.assignedAt = onCoordinators(next) ? (i.assignedAt ?? time(d, now)) : undefined
+  if (next.team !== i.team || next.assignee !== i.assignee) next.assignedEpoch = now
+  next.assignedAt = onCoordinators(next) ? (i.assignedAt ?? moscowTime(now)) : undefined
   applyCard(d, next, now)
 }
 export function execute(d: Desk, c: Command, now: number) {
@@ -360,6 +377,8 @@ export function execute(d: Desk, c: Command, now: number) {
   }
   switch (c.type) {
     case 'wifi': {
+      const registeredAt = now - 262 * 60_000
+      const restoredEpoch = now - 62 * 60_000
       const historic: Incident = {
         key: 'wifi-msk',
         id: 'INC000022008001',
@@ -367,8 +386,10 @@ export function execute(d: Desk, c: Command, now: number) {
         service: 'Офисный Wi-Fi',
         title: 'Недоступен Wi-Fi в офисе',
         team: 'Сети · Москва',
-        registered: '08:20',
-        restoredAt: '11:40',
+        registered: moscowTime(registeredAt),
+        registeredAt,
+        restoredAt: moscowTime(restoredEpoch),
+        restoredEpoch,
         state: 'Завершён',
         research: false,
         priority: 4,
@@ -385,12 +406,15 @@ export function execute(d: Desk, c: Command, now: number) {
         id: 'INC000022008002',
         team: coordinatorGroup,
         state: 'Назначен',
-        registered: time(d, now),
-        assignedAt: time(d, now),
+        registered: moscowTime(now),
+        registeredAt: now,
+        assignedAt: moscowTime(now),
+        assignedEpoch: now,
         site: 'Ростов',
-        due: moscowTime(standNow(d, now) + 7200000),
-        dueAt: standNow(d, now) + 7200000,
+        due: moscowTime(now + 7_200_000),
+        dueAt: now + 7_200_000,
         restoredAt: undefined,
+        restoredEpoch: undefined,
         workMinutes: undefined,
         specialists: undefined,
         solution: undefined,
@@ -402,6 +426,7 @@ export function execute(d: Desk, c: Command, now: number) {
       const i = additionalIncidents[d.demoCount % additionalIncidents.length]
       const n = d.demoCount++,
         id = n < 3 ? i.id : 'INC' + String(23000000 + n).padStart(12, '0')
+      const dueAt = i.due === null ? null : fixtureTime(now, i.due)
       applyCard(
         d,
         {
@@ -409,8 +434,12 @@ export function execute(d: Desk, c: Command, now: number) {
           id,
           key: d.mode === 'case' ? id : n < 3 ? i.key : id,
           team: coordinatorGroup,
-          assignedAt: time(d, now),
-          registered: time(d, now),
+          assignedAt: moscowTime(now),
+          assignedEpoch: now,
+          registered: moscowTime(now),
+          registeredAt: now,
+          dueAt,
+          due: dueAt === null ? null : moscowTime(dueAt),
         },
         now,
       )
@@ -531,17 +560,22 @@ export function execute(d: Desk, c: Command, now: number) {
       const w = work()
       if (c.type === 'room') {
         ensure(!w.room, 'Комната уже существует.')
+        const host = person?.name ?? 'Дежурный смены'
         w.room = {
           id: 'ER-' + target(d, c.key).id,
           ended: false,
           members: [
             {
-              role: person?.name ?? 'Дежурный смены',
+              role: host,
               team: coordinatorGroup,
-              invited: time(d, now),
-              joined: time(d, now),
+              invited: moscowTime(now),
+              joined: moscowTime(now),
               delivery: 'Прочитано',
             },
+          ],
+          timeline: [
+            {at: now, who: host, text: 'Приглашение'},
+            {at: now, who: host, text: 'Подключился'},
           ],
           fragments: [],
         }
@@ -568,7 +602,7 @@ export function execute(d: Desk, c: Command, now: number) {
           ...[...w.notes]
             .reverse()
             .map((n) => ({
-              at: time(d, n.at),
+              at: moscowTime(n.at),
               who: n.author ?? host,
               text:
                 'В журнале смены: ' +
@@ -579,7 +613,7 @@ export function execute(d: Desk, c: Command, now: number) {
                 '.',
             })),
           {
-            at: time(d, now),
+            at: moscowTime(now),
             who: host,
             text: 'Итог: ' + finding + '. Следующей смене: ' + next + '. Открытая проверка: ' + open,
           },
@@ -602,26 +636,8 @@ export function execute(d: Desk, c: Command, now: number) {
     case 'roomMember': {
       const room = work().room
       ensure(room && !room.ended, 'Встреча недоступна.')
-      if (!room.timeline) {
-        room.timeline = room.members
-          .flatMap((m) => {
-            const base = new Date(standNow(d, now) + 10800000).toISOString().slice(0, 10)
-            return [
-              [m.invited, 'Приглашение'],
-              [m.joined, 'Подключился'],
-              [m.left, 'Вышел'],
-            ]
-              .filter(([when]) => when)
-              .map(([when, text]) => ({
-                at: now + (Date.parse(base + 'T' + when + ':00+03:00') - standNow(d, now)),
-                who: m.role,
-                text: text!,
-              }))
-          })
-          .sort((a, b) => b.at - a.at)
-      }
-      const member = room.members.find((m) => m.role === c.owner)
-      const when = time(d, now)
+       const member = room.members.find((m) => m.role === c.owner)
+       const when = moscowTime(now)
       if (!member) {
         ensure(c.kind === 'invite', 'Участник не найден.')
         room.members.push({
@@ -704,12 +720,12 @@ export function execute(d: Desk, c: Command, now: number) {
         const dataset = w.dataObject ?? 'Реестр продукта'
         const age = w.lastRowAge ?? 0
         const stale = age > w.dataInterval
-        const last = time(d, measured - age * 60000)
+        const last = moscowTime(measured - age * 60000)
         analysis.evidence.push({
           source: 'Журнал загрузки',
           finding: stale ? 'Загрузка в ожидаемом интервале пропущена' : 'Загрузка завершена',
           record:
-            time(d, measured) +
+            moscowTime(measured) +
             ' МСК · ' +
             dataset +
             ' · ' +
@@ -719,7 +735,7 @@ export function execute(d: Desk, c: Command, now: number) {
           source: 'Проверка свежести данных',
           finding: stale ? 'Поток данных запаздывает' : 'Данные поступают вовремя',
           record:
-            time(d, measured) +
+            moscowTime(measured) +
             ' МСК · ' +
             dataset +
             ' · последняя запись ' +

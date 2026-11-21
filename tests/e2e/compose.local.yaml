@@ -1,0 +1,17 @@
+# Overlay for the backend repository's compose.yaml. The project and volumes
+# are per-run, and none of these services is published beyond loopback.
+services:
+  backend:
+    ports: !override
+      - "127.0.0.1:${BACKEND_PORT}:8080"
+  keycloak:
+    ports: !override
+      - "127.0.0.1:${MCC_E2E_KEYCLOAK_PORT}:8080"
+  itsm-mock:
+    volumes:
+      - type: bind
+        source: ${MCC_E2E_FIXTURE_FILE:?Set a local KAN-73 fixture}
+        target: /kan73-itsm-fixture.json
+        read_only: true
+        bind:
+          create_host_path: false
