@@ -9,7 +9,7 @@ import {OfficialAssignment} from './OfficialAssignment'
 import {ItsmEditor} from './ItsmEditor'
 import {RoutingAdvisor} from './RoutingAdvisor'
 import {usesRealBackend} from '../shared/api/mode'
-import {SimilarIncidents} from '../features/incidents/ui/SimilarIncidents'
+import {IncidentLinkPanel} from '../features/incidents/ui/IncidentLinkPanel'
 import {MessageComposer} from './NotificationCenter'
 import '../IncidentView.css'
 
@@ -45,10 +45,10 @@ export function Collaboration({item, incidents, section}: {item: Incident; incid
           <Text as="h2" variant="header-1">
             Похожие случаи и связи смены
           </Text>
-          <Label>{w.links.length}</Label>
+          {!usesRealBackend && <Label>{w.links.length}</Label>}
         </Flex>
         {group && <Link href={groupHref(group.id)}>К ситуации смены · {group.title} · {group.members.length} INC</Link>}
-        {w.links.map((k) => (
+        {!usesRealBackend && w.links.map((k) => (
           <Flex key={k} gap="spacing-2" wrap>
             <Link href={'#incident/' + k}>
               {byKey.get(k)?.id} · {byKey.get(k)?.title}
@@ -58,7 +58,7 @@ export function Collaboration({item, incidents, section}: {item: Incident; incid
             </Button>
           </Flex>
         ))}
-        {usesRealBackend ? <SimilarIncidents key={item.id} number={item.id} /> : <>
+        {usesRealBackend ? <IncidentLinkPanel key={item.id} number={item.id} /> : <>
         <Text color="secondary">
           {group && group.method !== 'single' ? 'Состав аварии собран в ситуации смены. Ниже — отдельные связи с другими случаями.' : 'Кандидаты из индекса по сервису, продукту и тексту симптома. Связь подтверждает координатор.'}
         </Text>

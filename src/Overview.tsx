@@ -1,5 +1,5 @@
 import {createContext, memo, useContext, useEffect, useMemo, useRef, useState} from 'react'
-import {Button, Card, Flex, Label, Link, Pagination, Progress, Select, Text, TextInput, useViewportSize} from '@gravity-ui/uikit'
+import {Button, Card, Flex, getConfig, Label, Link, Pagination, Progress, Select, Text, TextInput, useViewportSize} from '@gravity-ui/uikit'
 import {Table, useRowVirtualizer, useTable} from '@gravity-ui/table'
 import type {ColumnDef} from '@gravity-ui/table/tanstack'
 import type {Incident, ShiftEvent} from './desk/types'
@@ -10,7 +10,13 @@ import {queueOwnerLabels} from './control-room/attention'
 import {incidentOrder,registrationTime} from './desk/order'
 import {useWorkspace} from './desk/context'
 import {QueueFilters} from './desk/QueueFilters'
-import {active,standNow,dueInstant,fullTime, type QueueKey} from './desk/types'
+import {active,standNow,dueInstant,fullTime, itsmStateLabels, type QueueKey} from './desk/types'
+import type {IncidentDto} from './entities/incident/model/api-types'
+import {queueFilterKey} from './features/incidents/model/queueFilters'
+import {toIncident} from './features/incidents/model/toDesk'
+import {useIncidentQueue} from './features/incidents/model/useIncidentQueue'
+import {queueMessages} from './features/incidents/ui/queueMessages'
+import {usesRealBackend} from './shared/api/mode'
 import './Overview.css'
 
 import {LatestActivity, MovementJournal, QueueCounts} from './QueueActivity'
@@ -123,6 +129,29 @@ function queueHref(queue: OverviewQueue, params: URLSearchParams) {
 type TableGroup = QueueKey | 'all'
 type UpdateParams = (changes: Record<string,string>) => void
 
+function timeUntilDeadline(item: Incident, now: number) {
+  const deadline = dueInstant(item)
+  return deadline === null ? null : Math.ceil((deadline - now) / 60000)
+}
+
+function queueIncident(item: IncidentDto, known: Map<string, Incident>): Incident {
+  const summary = toIncident(item)
+  const previous = known.get(item.id)
+  return {
+    ...previous,
+    ...summary,
+    title: previous?.title || item.header || item.id,
+    service: previous?.service ?? summary.service,
+    serviceType: previous?.serviceType ?? summary.serviceType,
+    assignee: previous?.assignee ?? summary.assignee,
+    assigneeLogin: previous?.assigneeLogin ?? summary.assigneeLogin,
+    updatedAt: previous?.updatedAt ?? summary.updatedAt,
+    solution: previous?.solution ?? summary.solution,
+    description: previous?.description ?? summary.description,
+    state: itsmStateLabels[item.stateEnum],
+  }
+}
+
 function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, activity, live}: {
   groupKey: TableGroup; liveGroup: Incident[]; incidents: Incident[]; byKey: Map<string, Incident>;
   params: URLSearchParams; update: UpdateParams; activity?: Activity; live: boolean;
@@ -149,12 +178,25 @@ function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, acti
   const filtered = Object.keys(clearFilters).some(key => key !== 'page' && Boolean(params.get(key)))
   const encoded = params.toString()
   const clock = soonOnly || ['near', 'late'].includes(params.get('deadline') ?? '') ? Math.floor(reference / 1000) * 1000 : 0
+  const filterKey = usesRealBackend ? queueFilterKey(params) : ''
+  const clockBucket = ['near', 'late'].includes(params.get('deadline') ?? '') ? Math.floor(reference / 15000) : 0
+  const server = useIncidentQueue(filterKey, groupKey, live ? desk.lastImport : 0, clockBucket)
+  const awaitingServer = Boolean(filterKey && !server.items)
+  const copy = queueMessages[getConfig().lang === 'ru' ? 'ru' : 'en']
   const results = useMemo(() => {
+    if (filterKey) {
+      const entries = server.items?.map(item => queueIncident(item, byKey)) ?? []
+      if (!soonOnly) return entries
+      return entries.filter(item => {
+        const left = timeUntilDeadline(item, clock)
+        return left !== null && left >= 0 && left <= 30
+      })
+    }
     const filters = new URLSearchParams(encoded)
     const words = query.trim().toLocaleLowerCase('ru-RU').split(/\s+/).filter(Boolean)
     return group.filter((item) => {
       if (soonOnly) {
-        const at=dueInstant(item);const left=at===null?null:Math.ceil((at-clock)/60000)
+        const left = timeUntilDeadline(item, clock)
         if (left === null || left < 0 || left > 30) return false
       }
       for(const field of ['priority','product','team','state','serviceType'] as const){
@@ -169,7 +211,7 @@ function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, acti
       return words.every((word) => text.includes(word))
     }).sort(sort==='updated'?(a,b)=>(b.updatedAt??registrationTime(b))-(a.updatedAt??registrationTime(a))||incidentOrder(a,b):
       sort==='registered'?(a,b)=>registrationTime(b)-registrationTime(a)||a.id.localeCompare(b.id):incidentOrder)
-  }, [group, query, sort, encoded, soonOnly, clock, desk.threshold])
+  }, [filterKey, server.items, byKey, group, query, sort, encoded, soonOnly, clock, desk.threshold])
   const lastPage = Math.max(1, Math.ceil(results.length / size))
   const requestedPage = Number(params.get('page'))
   const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(lastPage, requestedPage)) : 1
@@ -186,10 +228,10 @@ function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, acti
              <span className="ops-total" aria-label={'Сейчас '+total}>{format.format(total)}</span>
           </div>
         </div>
-        {filtered && <Text color="secondary">{pending ? 'В показанной выборке: ' : 'Найдено: '}{format.format(results.length)}</Text>}
+        {filtered && !awaitingServer && <Text color="secondary">{pending ? 'В показанной выборке: ' : 'Найдено: '}{format.format(results.length)}</Text>}
         {soonOnly && <Label type="close" theme="warning" closeButtonLabel="Снять фильтр по сроку" onCloseClick={() => update({sla: '', page: ''})}>До 30 минут</Label>}
         {activity && groupKey !== 'all' && <LatestActivity queue={groupKey} activity={activity} desk={desk} byKey={byKey} />}
-        {pending && <Button className="queue-apply" size="m" view="outlined" onClick={() => setSnapshot(liveGroup)}>{pending.added ? 'Обновить таблицу (+'+pending.added+')' : 'Показать обновления таблицы'}</Button>}
+        {pending && <Button className="queue-apply" size="m" view="outlined" onClick={() => {setSnapshot(liveGroup); if (filterKey) server.retry()}}>{pending.added ? 'Обновить таблицу (+'+pending.added+')' : 'Показать обновления таблицы'}</Button>}
         <div className="overview-controls">
           <div className="mcc-field">
             <label htmlFor={'queue-search-'+groupKey}>Поиск</label>
@@ -199,12 +241,17 @@ function QueuePanel({groupKey, liveGroup, incidents, byKey, params, update, acti
           <div className="mcc-field">
             <label htmlFor={'queue-order-'+groupKey}>Порядок</label>
             <Select id={'queue-order-'+groupKey} width="max" size="l" value={[sort]} options={sortOptions}
-              onUpdate={([value]) => update({sort: value === 'deadline' ? '' : value, page:''})} />
+              onUpdate={([value]) => update({sort: usesRealBackend || value !== 'deadline' ? value : '', page:''})} />
           </div>
         </div>
       </div>
       <QueueFilters incidents={incidents} queue={groupKey} params={params} update={update} reset={() => update(clearFilters)} />
-      {pageRows.length ? <>
+      {awaitingServer ? <div className="overview-table-empty">
+        {server.failed ? <>
+          <Text role="alert" color="danger">{copy.failed}</Text>
+          <Button view="outlined" onClick={server.retry}>{copy.retry}</Button>
+        </> : <Text role="status" color="secondary">{copy.loading}</Text>}
+      </div> : pageRows.length ? <>
         <div ref={setScroll} className={'overview-table-scroll' + (pageRows.length >= 50 ? ' overview-table-scroll-long' : '')} tabIndex={0} role="region" aria-label="Список инцидентов">
           <IncidentTable rows={pageRows} label={selected.title} scroll={scroll} />
         </div>

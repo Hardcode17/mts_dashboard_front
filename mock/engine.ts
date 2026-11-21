@@ -356,12 +356,13 @@ export function createDesk(mode: Source, now: number): Desk {
   reconcileGroups(d,items(d),now)
   return d
 }
-export function tickDesk(d: Desk, now: number) {
+export function tickDesk(d: Desk, now: number, {deadlineWarnings = true} = {}) {
   let changed = dispatchTasks(d, now)
   if (d.movements?.length && d.movements[0].at <= now - queueWindowMs) {
     d.movements = d.movements.filter(move => move.at > now - queueWindowMs)
     changed = true
   }
+  if (!deadlineWarnings) return changed
   const stamp = standNow(d, now)
   for (const i of items(d)) {
     if (!active(i) || i.absent) continue

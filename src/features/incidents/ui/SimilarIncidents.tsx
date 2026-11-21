@@ -1,9 +1,11 @@
 import {useEffect, useState} from 'react'
-import {Button, Link, Text} from '@gravity-ui/uikit'
+import {Button, getConfig, Link, Text} from '@gravity-ui/uikit'
 import type {SimilarIncidentsResponse} from '../../../entities/incident/model/api-types'
 import {incidentsApi} from '../api/client'
+import {confirmedLinkMessages} from './confirmedLinkMessages'
 
-export function SimilarIncidents({number}: {number: string}) {
+export function SimilarIncidents({number, onSelect}: {number: string; onSelect?: (id: string) => void}) {
+  const copy = confirmedLinkMessages[getConfig().lang === 'ru' ? 'ru' : 'en']
   const [result, setResult] = useState<SimilarIncidentsResponse>()
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -32,6 +34,8 @@ export function SimilarIncidents({number}: {number: string}) {
         {candidate.incidentId}{candidate.header && ' · ' + candidate.header}
       </Link>
       <Text color="secondary">{candidate.reasons.join(' · ')}</Text>
+      {onSelect && <Button size="s" aria-label={copy.choose + ' ' + candidate.incidentId}
+        onClick={() => onSelect(candidate.incidentId)}>{copy.choose}</Button>}
     </li>)}
   </ul>
 }

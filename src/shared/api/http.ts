@@ -13,6 +13,7 @@ export class ApiError extends Error {
 }
 
 export interface HttpClientOptions {
+  fetcher?: (path: string, init: RequestInit) => Promise<Response>
   baseUrl?: string
   getAccessToken?: () => string | null | undefined | Promise<string | null | undefined>
 }
@@ -31,7 +32,7 @@ export function createHttpClient(options: HttpClientOptions = {}) {
     headers.set('Accept', 'application/json')
     if (token) headers.set('Authorization', `Bearer ${token}`)
 
-    const response = await fetch(`${baseUrl}${path}`, {
+    const response = await (options.fetcher ?? fetch)(`${baseUrl}${path}`, {
       ...init,
       headers,
       signal,

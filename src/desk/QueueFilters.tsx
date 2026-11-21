@@ -2,14 +2,16 @@ import {useMemo, useState} from 'react'
 import {Button, Select, Text, TextInput, Link} from '@gravity-ui/uikit'
 import type {Incident} from './types'
 import {useWorkspace} from './context'
-import {priorityNames} from './types'
+import {priorityNames, type QueueKey} from './types'
+import {PersonalPresets} from '../features/incident-presets/PersonalPresets'
+import {usesRealBackend} from '../shared/api/mode'
 
 type Props = {
   incidents: Incident[]
   params: URLSearchParams
   update: (p: Record<string, string>) => void
   reset: () => void
-  queue: string
+  queue: QueueKey | 'all'
 }
 
 const fields = [
@@ -100,42 +102,44 @@ export function QueueFilters({incidents, params, update, queue, reset}: Props) {
               <Link href="#overview?section=critical&sla=soon">Критические со сроком до 30 минут</Link>
               <Link href="#overview?section=assigned&deadline=late">Просроченное на координаторах</Link>
             </div>
-            <Text as="h3" variant="subheader-2">Мои представления</Text>
-            <div className="queue-preset-form">
-              <div className="mcc-field">
-                <label htmlFor={'queue-preset-name-' + queue}>Название представления</label>
-                <TextInput id={'queue-preset-name-' + queue} value={name} onUpdate={setName} />
-              </div>
-              <Button
-                disabled={!name.trim()}
-                onClick={async () => {
-                  if (
-                    await act({
-                      type: 'preset',
-                      person,
-                      title: name,
-                      value: '#queue/' + queue + (query ? '?' + query : ''),
-                    })
-                  )
-                    setName('')
-                }}
-              >
-                Сохранить представление
-              </Button>
-            </div>
-            {list.map((p) => (
-              <div className="queue-saved-preset" key={p.name}>
-                <Link href={p.href}>{p.name}</Link>
+            {usesRealBackend ? <PersonalPresets queue={queue} params={params}/> : <>
+              <Text as="h3" variant="subheader-2">Мои представления</Text>
+              <div className="queue-preset-form">
+                <div className="mcc-field">
+                  <label htmlFor={'queue-preset-name-' + queue}>Название представления</label>
+                  <TextInput id={'queue-preset-name-' + queue} value={name} onUpdate={setName} />
+                </div>
                 <Button
-                  size="s"
-                  view="flat-secondary"
-                  aria-label={'Удалить ' + p.name}
-                  onClick={() => void act({type: 'removePreset', person, title: p.name})}
+                  disabled={!name.trim()}
+                  onClick={async () => {
+                    if (
+                      await act({
+                        type: 'preset',
+                        person,
+                        title: name,
+                        value: '#queue/' + queue + (query ? '?' + query : ''),
+                      })
+                    )
+                      setName('')
+                  }}
                 >
-                  Удалить
+                  Сохранить представление
                 </Button>
               </div>
-            ))}
+              {list.map((p) => (
+                <div className="queue-saved-preset" key={p.name}>
+                  <Link href={p.href}>{p.name}</Link>
+                  <Button
+                    size="s"
+                    view="flat-secondary"
+                    aria-label={'Удалить ' + p.name}
+                    onClick={() => void act({type: 'removePreset', person, title: p.name})}
+                  >
+                    Удалить
+                  </Button>
+                </div>
+              ))}
+            </>}
           </div>
         </div>
       )}

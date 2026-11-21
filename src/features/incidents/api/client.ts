@@ -1,7 +1,9 @@
 import {ApiError, createHttpClient, type HttpClientOptions} from '../../../shared/api/http.ts'
 import type {
+  ConfirmedIncidentLink,
   IncidentDetailResponse,
   IncidentDto,
+  IncidentLinkKind,
   IncidentListResponse,
   IncidentNumber,
   IncidentRelationshipsResponse,
@@ -24,6 +26,10 @@ function listUrl(query: DashboardIncidentQuery) {
   if (query.includeCompleted !== undefined) params.set('includeCompleted', String(query.includeCompleted))
   if (query.limit !== undefined) params.set('limit', String(query.limit))
   if (query.cursor) params.set('cursor', query.cursor)
+  for (const name of ['q', 'priority', 'product', 'team', 'state', 'serviceType', 'deadline', 'sort'] as const) {
+    const value = query[name]
+    if (value !== undefined) params.set(name, String(value))
+  }
   const search = params.toString()
   return listPath + (search ? '?' + search : '')
 }
@@ -63,6 +69,10 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
     const firstQuery = {...query, includeCompleted: query.includeCompleted ?? true, limit: 100}
     const url = listUrl(firstQuery)
     const previous = cache.get(url)
+    if (previous) {
+      cache.delete(url)
+      cache.set(url, previous)
+    }
     const response = await requestResponse(url, {
       headers: previous?.etag ? {'If-None-Match': previous.etag} : {},
     }, signal)
@@ -88,6 +98,10 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
     }
     const data = {revision: first.revision, eventSeq: first.eventSeq, beforeFirstSuccess: first.beforeFirstSuccess, counts, items}
     cache.set(url, {etag: response.headers.get('ETag'), data})
+    if (cache.size > 32) {
+      const oldest = cache.keys().next().value
+      if (oldest !== undefined) cache.delete(oldest)
+    }
     return data
   }
 
@@ -104,7 +118,17 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
         itsmUrl: card.itsmUrl,
         itsmDemo: card.itsmDemo,
         meetingUrl: null,
+        confirmedLinks: card.confirmedLinks ?? [],
       }
+    },
+
+    confirmIncidentLink(number: IncidentNumber, targetIncidentId: IncidentNumber, kind: IncidentLinkKind,
+      signal?: AbortSignal) {
+      return request<ConfirmedIncidentLink>(listPath + '/' + encodeURIComponent(number) + '/confirmed-links', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({targetIncidentId, kind}),
+      }, signal)
     },
 
     getSimilar(number: IncidentNumber, signal?: AbortSignal) {

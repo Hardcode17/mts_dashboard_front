@@ -4,6 +4,8 @@ import {mkdirSync, readFileSync, statSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {IncomingMessage, ServerResponse} from 'node:http'
 import {groupModelWorker} from './groupModel.ts'
+import {saveCoordinatorAvailability, syncCoordinator} from './coordinatorAvailability.ts'
+import {shiftAvailabilityMessages} from '../src/features/shift-availability/messages.ts'
 import {livePublication} from './livePublication.ts'
 import {localOfficial} from './localOfficial.ts'
 import {handleFixtureRelationships} from './relationships.ts'
@@ -14,11 +16,11 @@ import {applyCard, applySnapshot, createDesk, dispatchTasks, execute, items, loo
 import {shiftClockBase, withFixtureTimes} from './fixtures/shift.ts'
 import {itsmGateway, ItsmError, mergeConfirmation} from './itsm.ts'
 import {requireWorkspaceUser, workspaceAuthSettings} from './workspaceAuth.ts'
-import {coordinatorGroup, type Desk, type Command, type Source} from '../src/desk/types.ts'
+import {type Desk, type Command, type Source} from '../src/desk/types.ts'
 
 const liveCommands = new Set<Command['type']>([
   'ack', 'available', 'accept', 'handoff', 'link', 'unlink', 'note', 'toggleNote', 'threshold',
-  'report', 'preset', 'removePreset', 'advisor', 'groupClaim', 'groupAdd', 'groupExclude',
+  'report', 'advisor', 'groupClaim', 'groupAdd', 'groupExclude',
 ])
 
 export function liveWorkspaceService(backend: string, directory = process.env.MCC_STATE_DIR || resolve('.mcc-workspace')) {
@@ -104,11 +106,16 @@ export function mockService(
       d.clockBase ??= shiftClockBase
       for (const [key, item] of Object.entries(d.records)) d.records[key] = withFixtureTimes(item)
     }
-    if (liveBackend) d.signals = d.signals.filter(signal => /^evt-\d+$/.test(signal.id))
+    const eventsBeforeCleanup = d.events.length
+    if (liveBackend) {
+      d.signals = d.signals.filter(signal => /^evt-\d+$/.test(signal.id))
+      d.events = d.events.filter(event => event.kind !== 'due' || !event.id.startsWith('obs-'))
+    }
     const withoutGroups = !d.outageGroups
     if (withoutGroups) reconcileGroups(d,items(d),Date.now())
     desks.set(mode, d)
     if (!row || legacy || withoutGroups) save(d)
+    else if (d.events.length !== eventsBeforeCleanup) save(d, false)
   }
   const live = liveBackend && gateway
     ? livePublication(liveBackend, gateway, () => desks.get('case')!, save)
@@ -161,7 +168,7 @@ export function mockService(
     const now = Date.now()
     pollFile()
     for (const d of desks.values()) {
-      const ticked = tickDesk(d, now)
+      const ticked = tickDesk(d, now, {deadlineWarnings: !live})
       if (sampleMonitorHistory(d, () => items(d), now) || ticked) save(d, false)
     }
     void groupReviewer.check()
@@ -189,18 +196,16 @@ export function mockService(
     try {
       if (live) {
         if (!['snapshot', 'action', 'itsm'].includes(operation)) return send(res, 404, {error: 'Неизвестный маршрут API.'})
-        await live.refresh(req.headers)
         const desk = current()
-        if (desk.apiBeforeFirstSuccess && operation !== 'snapshot')
-          return send(res, 503, {error: 'Ожидаем первую публикацию Spring.'})
-        const person = desk.people.find(p => p.id === profile.id)
-        if (!person || person.name !== profile.name) {
-          const next = structuredClone(desk)
-          if (person) next.people.find(p => p.id === profile.id)!.name = profile.name
-          else next.people.push({id: profile.id, name: profile.name, group: coordinatorGroup, available: true, generation: 1})
-          dispatchTasks(next, Date.now())
-          save(next, false)
+        const next = {...desk, people: desk.people.map(person => ({...person}))}
+        if (syncCoordinator(next, profile)) {
+          const updated = structuredClone(next)
+          dispatchTasks(updated, Date.now())
+          save(updated, false)
         }
+        await live.refresh(req.headers)
+        if (current().apiBeforeFirstSuccess && operation !== 'snapshot')
+          return send(res, 503, {error: 'Ожидаем первую публикацию Spring.'})
       }
       const itsmPath = operation === 'itsm'
       function knownCard(key: unknown) {
@@ -243,7 +248,7 @@ export function mockService(
           now: Date.now(),
           desk: url.searchParams.get('since') === String(d.version) ? null : live && d.apiBeforeFirstSuccess
             ? {...createDesk('case', d.started), version: d.version, people: d.people, enabled: [], apiBeforeFirstSuccess: true, sourceError: d.sourceError}
-            : workspaceView(d),
+            : live ? {...workspaceView(d), presets: {}} : workspaceView(d),
         })
       }
       if (
@@ -294,6 +299,19 @@ export function mockService(
         if (gateway && cmd.type === 'edit') throw new ItsmError(400,'Сохраните изменение через форму «Изменить в ITSM».')
         if (live && cmd.type === 'ack') {
           await live.acknowledge(req.headers, cmd.ids)
+        } else if (live && cmd.type === 'available') {
+          const copy = shiftAvailabilityMessages.ru
+          if (body.person !== undefined && body.person !== profile.id)
+            return send(res, 403, {error: copy.onlySelf})
+          if (typeof cmd.enabled !== 'boolean') return send(res, 400, {error: copy.invalid})
+          if (!profile.availability) return send(res, 503, {error: copy.notConfigured})
+          const bearer = req.headers.authorization?.slice('Bearer '.length) ?? ''
+          const availability = await saveCoordinatorAvailability(auth.profileUrl, bearer, cmd.enabled)
+          const desk = structuredClone(current())
+          if (syncCoordinator(desk, {...profile, availability})) {
+            dispatchTasks(desk, now)
+            save(desk, false)
+          }
         } else if (gateway && cmd.type === 'handoff') {
           await externalEdit(cmd.key,{assignedGroupName:cmd.value},cmd.expected,cmd)
         } else {
@@ -307,7 +325,7 @@ export function mockService(
           pollFile()
         }
         return send(res, 200, {
-          desk: workspaceView(current()),
+          desk: live ? {...workspaceView(current()), presets: {}} : workspaceView(current()),
           ...(live && {person: profile.id}),
           version: current().version,
           now,

@@ -1,8 +1,8 @@
 import {AsyncLocalStorage} from 'node:async_hooks'
 import type {IncomingHttpHeaders} from 'node:http'
-import type {Incident} from '../src/desk/types.ts'
-import type {Desk, Signal} from '../src/desk/types.ts'
-import {itsmStateLabels} from '../src/desk/types.ts'
+import type {Desk, Incident, ShiftEvent, Signal} from '../src/desk/types.ts'
+import {fullTime, itsmStateLabels, moscowTime} from '../src/desk/types.ts'
+import {deadlineWarningMessages} from '../src/desk/deadlineWarningMessages.ts'
 import {createIncidentsApi} from '../src/features/incidents/api/client.ts'
 import {toIncident} from '../src/features/incidents/model/toDesk.ts'
 import {ApiError, createHttpClient} from '../src/shared/api/http.ts'
@@ -11,6 +11,16 @@ import type {itsmGateway} from './itsm.ts'
 import {ItsmError} from './itsm.ts'
 
 type Gateway = NonNullable<ReturnType<typeof itsmGateway>>
+
+interface IncidentChange {
+  eventSeq: number
+  eventId: string
+  changeRevision: number
+  incidentId: string
+  changeKind: string
+  observedAt: string
+  details?: {deadline?: string} | null
+}
 
 /** List publications are atomic. Rich cards and direct graph edges load in bounded batches. */
 export function livePublication(
@@ -116,19 +126,46 @@ export function livePublication(
       // Warm up from persisted history in bounded pages; this cursor is independent of publication.eventSeq.
       for (let page = 0; page < 4; page++) {
         const result = await journal.request<{
-          events: {eventSeq: number; changeRevision: number; incidentId: string}[]
-          lastEventSeq: number; hasMore: boolean
+          events: IncidentChange[]
+          hasMore: boolean
         }>('/api/dashboard/incidents/changes?afterEventSeq=' + journalCursor + '&limit=100', {}, timeout())
         if (lifetime.signal.aborted || epoch !== generation) return
-        const previous = journalCursor
+        const desk = current()
+        const seen = new Set<string>()
+        const warnings: ShiftEvent[] = []
+        let nextCursor = journalCursor
+        let awaitingPublication = false
         for (const event of result.events) {
-          if (publication.revision == null || event.changeRevision > publication.revision) return
-          if (event.changeRevision > initialRevision && current().records[event.incidentId] && !current().records[event.incidentId].absent) {
+          if (event.eventSeq <= nextCursor) continue
+          if (publication.revision == null || event.changeRevision > publication.revision) {
+            awaitingPublication = true
+            break
+          }
+          nextCursor = event.eventSeq
+          if (event.changeKind === 'DEADLINE_APPROACHING') {
+            const at = Date.parse(event.observedAt)
+            const deadline = Date.parse(event.details?.deadline ?? '')
+            if (!Number.isFinite(at) || !Number.isFinite(deadline) || seen.has(event.eventId)) continue
+            seen.add(event.eventId)
+            warnings.push({
+              id: event.eventId, key: event.incidentId, at, time: moscowTime(at), kind: 'due',
+              change: deadlineWarningMessages.ru.deadline(fullTime(deadline)),
+            })
+          } else if (event.changeRevision > initialRevision && desk.records[event.incidentId] && !desk.records[event.incidentId].absent) {
             pending.add(event.incidentId)
           }
-          journalCursor = Math.max(journalCursor, event.eventSeq)
         }
-        if (!result.hasMore || journalCursor <= previous) break
+        if (warnings.length) {
+          const existing = new Set(desk.events.map(event => event.id))
+          const added = warnings.filter(event => !existing.has(event.id))
+          if (added.length) {
+            const events = [...added.reverse(), ...desk.events].sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+            save({...desk, events}, false)
+          }
+        }
+        const advanced = nextCursor > journalCursor
+        journalCursor = nextCursor
+        if (awaitingPublication || !result.hasMore || !advanced) break
       }
     } catch {
       // The published list remains available if the independent change feed is temporarily down.

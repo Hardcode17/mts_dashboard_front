@@ -6,6 +6,8 @@ import {incidentsApi} from '../api/client'
 import {displayState} from '../model/toDesk'
 import type {IncidentDetailResponse} from '../../../entities/incident/model/api-types'
 import {IncidentRelationships} from './IncidentRelationships'
+import {IncidentLinkPanel} from './IncidentLinkPanel'
+import {usesRealBackend} from '../../../shared/api/mode'
 
 type LoadState =
   | {status: 'loading'}
@@ -173,6 +175,9 @@ export function IncidentApiRoute({number}: {number: string}) {
           )}
           {state.status !== 'error' && (
             <IncidentRelationships key={number} incidentId={number} />
+          )}
+          {usesRealBackend && state.status === 'ready' && (
+            <IncidentLinkPanel key={'links-' + number} number={number} initialLinks={state.detail.confirmedLinks}/>
           )}
         </section>
       </Drawer>

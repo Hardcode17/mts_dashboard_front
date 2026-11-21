@@ -5,6 +5,7 @@ import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
 import {useDesk} from './desk/useDesk'
 import {DashboardAccount} from './features/auth/DashboardAuth'
 import {usesRealBackend} from './shared/api/mode'
+import {IncidentPresetsProvider} from './features/incident-presets/provider'
 import {monitorMode, openMonitor, watchMonitorMode} from './monitoring/mode'
 import {IncidentGroups} from './control-room/IncidentGroups'
 import {QuickCard} from './desk/QuickCard'
@@ -91,10 +92,12 @@ export default function App(props:ThemeProps){
     <Button onClick={() => void client.refresh()}>Проверить снова</Button><DashboardAccount />
   </Card></main>
   return <DeskContext.Provider value={{...client,desk:client.desk}}>
-    {(!monitor || history.state?.mccMonitorFrom) && <div hidden={monitor}>
-      <Workspace key={client.mode} {...props} suspended={monitor} incidents={incidents}/>
-    </div>}
-    {monitor && <Suspense fallback={<div role="status">Загрузка видеостены…</div>}><OutageWall theme={props.theme} incidents={incidents}/></Suspense>}
+    <IncidentPresetsProvider key={usesRealBackend ? client.person : undefined} enabled={usesRealBackend}>
+      {(!monitor || history.state?.mccMonitorFrom) && <div hidden={monitor}>
+        <Workspace key={client.mode} {...props} suspended={monitor} incidents={incidents}/>
+      </div>}
+      {monitor && <Suspense fallback={<div role="status">Загрузка видеостены…</div>}><OutageWall theme={props.theme} incidents={incidents}/></Suspense>}
+    </IncidentPresetsProvider>
   </DeskContext.Provider>
 }
 function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {incidents: Incident[]; suspended:boolean}){
