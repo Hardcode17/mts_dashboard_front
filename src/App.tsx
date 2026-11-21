@@ -1,5 +1,6 @@
+import {Moon, Sun} from '@gravity-ui/icons'
 import {lazy, Suspense, useEffect, useMemo, useRef, useState} from 'react'
-import {Button, Card, Dialog, Flex, Label, Link, Loader, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
+import {Button, Card, Dialog, Flex, Icon, Label, Link, Loader, SegmentedRadioGroup, Text} from '@gravity-ui/uikit'
 import {initialEvents, initialIncidents} from './demoData'
 import {correlationIndex,similarIncidents} from './desk/correlation'
 import {DeskContext,useWorkspace,RelatedIndex} from './desk/context'
@@ -142,8 +143,8 @@ function Workspace({theme,changeTheme}:ThemeProps){
           <Flex alignItems="center" gap="spacing-3" className="snapshot">
             <Text className="snapshot-clock" color="secondary" variant="body-1">{moscowTime(standNow(desk,now))} МСК</Text>
             <SegmentedRadioGroup<'light' | 'dark'> aria-label="Тема оформления" value={theme} onUpdate={changeTheme} size="m">
-              <SegmentedRadioGroup.Option value="light">Светлая</SegmentedRadioGroup.Option>
-              <SegmentedRadioGroup.Option value="dark">Тёмная</SegmentedRadioGroup.Option>
+              <SegmentedRadioGroup.Option value="light" title="Светлая" controlProps={{'aria-label': 'Светлая'}}><Icon data={Sun} size={16} aria-hidden="true"/></SegmentedRadioGroup.Option>
+              <SegmentedRadioGroup.Option value="dark" title="Тёмная" controlProps={{'aria-label': 'Тёмная'}}><Icon data={Moon} size={16} aria-hidden="true"/></SegmentedRadioGroup.Option>
             </SegmentedRadioGroup>
           </Flex>
         </Flex>
