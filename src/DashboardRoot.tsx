@@ -4,7 +4,7 @@ import App from './App'
 
 export default function DashboardRoot() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    try { return localStorage.getItem('mcc-theme') === 'dark' ? 'dark' : 'light' } catch { return 'light' }
+    try { return localStorage.getItem('mcc-theme') === 'light' ? 'light' : 'dark' } catch { return 'dark' }
   })
   function changeTheme(value: 'light' | 'dark') {
     setTheme(value)
