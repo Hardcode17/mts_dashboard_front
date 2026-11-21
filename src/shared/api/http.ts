@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 export interface HttpClientOptions {
   baseUrl?: string
-  getAccessToken?: () => string | null | undefined
+  getAccessToken?: () => string | null | undefined | Promise<string | null | undefined>
 }
 
 export function createHttpClient(options: HttpClientOptions = {}) {
@@ -26,7 +26,7 @@ export function createHttpClient(options: HttpClientOptions = {}) {
     signal?: AbortSignal,
   ): Promise<T> {
     const headers = new Headers(init.headers)
-    const token = options.getAccessToken?.()
+    const token = await options.getAccessToken?.()
 
     headers.set('Accept', 'application/json')
     if (token) headers.set('Authorization', `Bearer ${token}`)

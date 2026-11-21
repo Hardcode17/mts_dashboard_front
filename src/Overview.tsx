@@ -11,6 +11,7 @@ import {groupIncidents, recentlyUpdated} from './desk/incidentGroups'
 import {useWorkspace} from './desk/context'
 import {QueueFilters} from './desk/QueueFilters'
 import {active,standNow,dueInstant,fullTime} from './desk/types'
+import {defaultOverviewOrder, moveOverviewBlock, overviewBlockTitles, readOverviewOrder, saveOverviewOrder, type OverviewBlockId, type OverviewMoveDirection} from './overviewLayout'
 import './Overview.css'
 
 const queues = [
@@ -134,6 +135,63 @@ const IncidentTable = memo(function IncidentTable({rows, label, scroll, api}: {
   return <Table table={table} rowVirtualizer={virtual ? rowVirtualizer : undefined} size="s" stickyHeader verticalAlign="middle" className="overview-data-table" attributes={{'aria-label': label}} />
 })
 
+function OverviewStats({groupCount}: {groupCount: (queue: QueueKey) => number}) {
+  return <div className="overview-wall-stats">
+    {queues.map((queue) => <Link key={queue.key} view="primary" href={'#queue/' + queue.key} className={'overview-stat mcc-glass mcc-tile overview-kind-' + queue.key}>
+      <Text variant="body-1" className="overview-stat-label">{queue.title}</Text>
+      <Text variant="display-2">{format.format(groupCount(queue.key))}</Text>
+    </Link>)}
+  </div>
+}
+
+function CriticalOverview({critical, total, demoLink}: {critical: Incident[]; total: number; demoLink: boolean}) {
+  return <>
+    <Flex justifyContent="space-between" alignItems="baseline" wrap="wrap" gap="spacing-2">
+      <Text as="h2" variant="header-2">Ближайшие критические сроки</Text>
+      <Flex alignItems="center" gap="spacing-3" wrap>
+        {demoLink && <Link href="#investigation/incident">Пример разбора агентом</Link>}
+        <Text color="secondary">Показано {critical.length} из {format.format(total)}</Text>
+      </Flex>
+    </Flex>
+    <div className="overview-critical-grid">
+      {!critical.length && <Text color="secondary">Активных критических инцидентов нет.</Text>}
+      {critical.map((item) => <CriticalTile key={item.key} item={item} />)}
+    </div>
+  </>
+}
+
+function OverviewLayoutSettings({order, status, onMove, onReset}: {
+  order: OverviewBlockId[]
+  status: string
+  onMove: (id: OverviewBlockId, direction: OverviewMoveDirection) => void
+  onReset: () => void
+}) {
+  return <Card id="overview-layout-settings" view="outlined" className="overview-layout-config" role="region" aria-labelledby="overview-layout-title">
+    <Flex justifyContent="space-between" alignItems="baseline" gap="spacing-2" wrap>
+      <Text as="h2" id="overview-layout-title" variant="subheader-2">Порядок блоков</Text>
+      <Button view="flat-secondary" size="s" onClick={onReset}>Сбросить по умолчанию</Button>
+    </Flex>
+    <Text color="secondary" variant="caption-2">Перемещайте блоки кнопками «Выше» и «Ниже». Порядок сохраняется на этом устройстве.</Text>
+    <ol className="overview-layout-list" aria-label="Текущий порядок блоков">
+      {order.map((id, index) => {
+        const title = overviewBlockTitles[id]
+        return <li key={id} className="overview-layout-row">
+          <Text variant="body-1">{title}</Text>
+          <Flex gap="spacing-2" wrap>
+            <Button size="s" view="outlined" disabled={index === 0}
+              aria-label={'Переместить блок «' + title + '» выше'} onClick={() => onMove(id, -1)}>Выше</Button>
+            <Button size="s" view="outlined" disabled={index === order.length - 1}
+              aria-label={'Переместить блок «' + title + '» ниже'} onClick={() => onMove(id, 1)}>Ниже</Button>
+          </Flex>
+        </li>
+      })}
+    </ol>
+    <Text className="overview-layout-status" role="status" aria-live="polite" color="secondary" variant="caption-2">
+      {status || 'Изменения сохраняются автоматически.'}
+    </Text>
+  </Card>
+}
+
 function queueHref(queue: OverviewQueue, params: URLSearchParams) {
   const query = params.toString()
   return (queue === 'events' ? '#events' : '#queue/' + queue) + (query ? '?' + query : '')
@@ -245,6 +303,9 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
   const groups = useMemo(() => groupIncidents(incidents), [incidents])
   const [queueQueries, setQueueQueries] = useState<Partial<Record<IncidentQueue, string>>>({})
   const sidebarDestination = useRef<IncidentQueue | null>(null)
+  const [layoutEditing, setLayoutEditing] = useState(false)
+  const [overviewOrder, setOverviewOrder] = useState<OverviewBlockId[]>(readOverviewOrder)
+  const [layoutStatus, setLayoutStatus] = useState('')
   const search = listingHash.split('?')[1] ?? ''
   const params = new URLSearchParams(search)
   const showQueues = !wall && !summary && activeQueue !== 'events'
@@ -295,29 +356,53 @@ export function Overview({listingHash, incidents, events, wall, summary, activeQ
     }
   }
 
+  function applyOverviewOrder(next: OverviewBlockId[], message: string) {
+    setOverviewOrder(saveOverviewOrder(next))
+    setLayoutStatus(message)
+  }
+
+  function moveBlock(id: OverviewBlockId, direction: OverviewMoveDirection) {
+    const next = moveOverviewBlock(overviewOrder, id, direction)
+    applyOverviewOrder(next, 'Блок «' + overviewBlockTitles[id] + '» перемещён ' + (direction < 0 ? 'выше' : 'ниже') + '. Порядок сохранён.')
+  }
+
+  function resetOverviewOrder() {
+    applyOverviewOrder([...defaultOverviewOrder], 'Порядок блоков сброшен по умолчанию.')
+  }
+
   if (wall || summary) {
     const critical = [...groups.critical].sort(incidentOrder).slice(0, 3)
     return <div className={wall ? 'overview-wall' : 'overview-summary'}>
       <div className="overview-wall-main">
-        {desk.lastImport > 0 && <Text color="secondary" variant="caption-2">
-          Последнее обновление снимка: {fullTime(desk.lastImport)} МСК
-        </Text>}
-        <div className="overview-wall-stats">
-          {queues.map((queue) => <Link key={queue.key} view="primary" href={'#queue/' + queue.key} className={'overview-stat mcc-glass mcc-tile overview-kind-' + queue.key}>
-            <Text variant="body-1" className="overview-stat-label">{queue.title}</Text>
-            <Text variant="display-2">{format.format(groupCount(queue.key))}</Text>
-          </Link>)}
-        </div>
-        <IncidentFlowCard />
-        {summary && <ShiftCharts incidents={incidents} critical={groups.critical} />}
-        <Flex justifyContent="space-between" alignItems="baseline" wrap="wrap" gap="spacing-2">
-          <Text as="h2" variant="header-2">Ближайшие критические сроки</Text>
-          <Flex alignItems="center" gap="spacing-3" wrap>
-            {summary && desk.mode==='volume' && <Link href="#investigation/incident">Пример разбора агентом</Link>}
-          <Text color="secondary">Показано {critical.length} из {format.format(groupCount('critical'))}</Text>
-          </Flex>
-        </Flex>
-        <div className="overview-critical-grid">{!critical.length&&<Text color="secondary">Активных критических инцидентов нет.</Text>}{critical.map((item) => <CriticalTile key={item.key} item={item} />)}</div>
+        {summary ? <>
+          <div className="overview-summary-meta">
+            {desk.lastImport > 0 && <Text color="secondary" variant="caption-2">
+              Последнее обновление снимка: {fullTime(desk.lastImport)} МСК
+            </Text>}
+            <Button size="s" view={layoutEditing ? 'flat-secondary' : 'outlined'}
+              aria-expanded={layoutEditing} aria-controls={layoutEditing ? 'overview-layout-settings' : undefined}
+              onClick={() => { setLayoutEditing(value => !value); setLayoutStatus('') }}>
+              {layoutEditing ? 'Готово' : 'Настроить порядок блоков'}
+            </Button>
+          </div>
+          {layoutEditing && <OverviewLayoutSettings order={overviewOrder} status={layoutStatus} onMove={moveBlock} onReset={resetOverviewOrder} />}
+          <div className="overview-summary-blocks">
+            {overviewOrder.map(id => <section key={id}
+              className={layoutEditing ? 'overview-layout-block overview-layout-block--editing' : 'overview-layout-block'}
+              aria-label={overviewBlockTitles[id]} data-overview-block={id}>
+              {id === 'stats' ? <><OverviewStats groupCount={groupCount} /><IncidentFlowCard /></>
+                : id === 'charts' ? <ShiftCharts incidents={incidents} critical={groups.critical} />
+                : <CriticalOverview critical={critical} total={groupCount('critical')} demoLink={desk.mode === 'volume'} />}
+            </section>)}
+          </div>
+        </> : <>
+          {desk.lastImport > 0 && <Text color="secondary" variant="caption-2">
+            Последнее обновление снимка: {fullTime(desk.lastImport)} МСК
+          </Text>}
+          <OverviewStats groupCount={groupCount} />
+          <IncidentFlowCard />
+          <CriticalOverview critical={critical} total={groupCount('critical')} demoLink={false} />
+        </>}
       </div>
       <EventStream incidents={incidents} events={events} />
     </div>

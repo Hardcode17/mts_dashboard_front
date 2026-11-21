@@ -58,7 +58,7 @@ function useDashboardLocation(mode: string) {
   return route
 }
 
-type ThemeProps = {theme:'light'|'dark';changeTheme:(value:'light'|'dark')=>void}
+type ThemeProps = {theme:'light'|'dark';changeTheme:(value:'light'|'dark')=>void;onOpenMonitor:()=>void}
 export default function App(props:ThemeProps){
   const [pathname, setPathname] = useState(() => window.location.pathname)
   useEffect(() => {
@@ -82,7 +82,7 @@ function DeskApplication(props:ThemeProps){
       {client.mode === 'api' && <Button onClick={() => client.source('volume')}>Большая смена</Button>}</>:<div role="status" aria-label="Загрузка смены"><Loader/></div>}</Card></main>
   return <DeskContext.Provider value={{...client,desk:client.desk}}><Workspace key={client.mode} {...props}/></DeskContext.Provider>
 }
-function Workspace({theme,changeTheme}:ThemeProps){
+function Workspace({theme,changeTheme,onOpenMonitor}:ThemeProps){
   const {desk,person,checked,now,error,actionError,clearError,refresh,act,busy,mode}=useWorkspace()
   const [displayed,setDisplayed]=useState<string[]>([])
   const route = useDashboardLocation(desk.mode)
@@ -156,6 +156,7 @@ function Workspace({theme,changeTheme}:ThemeProps){
           </nav>
           <Flex alignItems="center" gap="spacing-3" className="snapshot">
             <Text className="snapshot-clock" color="secondary" variant="body-1">{moscowTime(standNow(desk,now))} МСК</Text>
+            <Button className="monitor-entry" view="action" size="m" onClick={onOpenMonitor} title="Полноэкранный монитор для комнаты координаторов">Монитор</Button>
             <button
               type="button"
               className="theme-switch"

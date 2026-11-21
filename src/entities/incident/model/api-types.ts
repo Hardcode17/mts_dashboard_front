@@ -88,10 +88,28 @@ export interface IncidentListResponse {
 
 export interface IncidentDetailResponse {
   revision: number | null
-  incident: IncidentDto
+  incident: Omit<IncidentDto, 'updatedAt'> & {updatedAt: string | null}
   itsmUrl: string
   itsmDemo: boolean
   meetingUrl: string | null
+}
+
+export interface IncidentRelationshipNode {
+  id: string
+  title: string | null
+  stateEnum: string | null
+  priorityId: number | null
+}
+
+export interface IncidentRelationshipEdge {
+  parentId: string
+  childId: string
+}
+
+export interface IncidentRelationshipsResponse {
+  focusId: string
+  nodes: IncidentRelationshipNode[]
+  edges: IncidentRelationshipEdge[]
 }
 
 export interface SnapshotStatus {

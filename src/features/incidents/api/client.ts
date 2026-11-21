@@ -1,9 +1,11 @@
+import {getApiAccessToken} from '../../../shared/api/session.ts'
 import {createHttpClient, type HttpClientOptions} from '../../../shared/api/http.ts'
 import type {
   IncidentDetailResponse,
   IncidentFilters,
   IncidentListResponse,
   IncidentNumber,
+  IncidentRelationshipsResponse,
   SnapshotStatus,
 } from '../../../entities/incident/model/api-types.ts'
 
@@ -42,10 +44,21 @@ export function createIncidentsApi(options: HttpClientOptions = {}) {
       )
     },
 
+    getIncidentRelationships(
+      number: IncidentNumber,
+      signal?: AbortSignal,
+    ): Promise<IncidentRelationshipsResponse> {
+      return request(
+        `/api/incidents/${encodeURIComponent(number)}/relationships`,
+        {},
+        signal,
+      )
+    },
+
     getSnapshotStatus(signal?: AbortSignal): Promise<SnapshotStatus> {
       return request('/api/snapshot/status', {}, signal)
     },
   }
 }
 
-export const incidentsApi = createIncidentsApi()
+export const incidentsApi = createIncidentsApi({getAccessToken: getApiAccessToken})

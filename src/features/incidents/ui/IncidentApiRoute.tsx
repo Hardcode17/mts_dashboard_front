@@ -3,6 +3,7 @@ import {Button, Drawer, Flex, Label, Loader, Text} from '@gravity-ui/uikit'
 import {ApiError} from '../../../shared/api/http'
 import {incidentsApi} from '../api/client'
 import type {IncidentDetailResponse} from '../../../entities/incident/model/api-types'
+import {IncidentRelationships} from './IncidentRelationships'
 
 type LoadState =
   | {status: 'loading'}
@@ -152,6 +153,9 @@ export function IncidentApiRoute({number}: {number: string}) {
                 </Text>
               )}
             </>
+          )}
+          {state.status !== 'error' && (
+            <IncidentRelationships key={number} incidentId={number} />
           )}
         </section>
       </Drawer>

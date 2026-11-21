@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "test:relationships": "npm run build && node --test tests/incident-relationships.browser.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -14,8 +15,11 @@
   },
   "dependencies": {
     "@gravity-ui/charts": "^2.1.0",
+    "@gravity-ui/icons": "^2.23.1",
     "@gravity-ui/table": "^2.0.0",
     "@gravity-ui/uikit": "^8.1.0",
+    "chart.js": "^4.6.1",
+    "keycloak-js": "^26.2.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "serve-handler": "6.1.7"

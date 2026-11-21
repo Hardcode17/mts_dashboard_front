@@ -1,0 +1,108 @@
+.incident-relationships {
+  margin-block-start: var(--g-spacing-5);
+}
+
+.incident-relationships :is(h2, h3, p) {
+  margin: 0;
+}
+
+.incident-relationships-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-spacing-1);
+  min-width: 0;
+}
+
+.incident-relationships-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--g-spacing-2);
+}
+
+.incident-relationships-error-icon {
+  color: var(--g-color-text-danger);
+  flex-shrink: 0;
+}
+
+.relationship-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-spacing-2);
+}
+
+.relationship-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-spacing-2);
+}
+
+.relationship-list {
+  display: grid;
+  gap: var(--g-spacing-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.relationship-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-spacing-1);
+}
+
+.relationship-node {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-spacing-2);
+  min-width: 0;
+  padding: var(--g-spacing-3);
+  border: 1px solid var(--mcc-hairline);
+  border-radius: var(--g-border-radius-m);
+  background: var(--g-color-base-generic);
+  color: var(--g-color-text-primary);
+}
+
+.relationship-node_link {
+  text-decoration: none;
+}
+
+.relationship-node_link:hover {
+  border-color: var(--g-color-line-generic-hover);
+  background: var(--g-color-base-generic-hover);
+}
+
+.relationship-node_link:focus-visible {
+  outline: 2px solid var(--g-color-line-focus);
+  outline-offset: 2px;
+}
+
+.relationship-node_selected {
+  border: 2px solid var(--g-color-line-brand);
+  background: var(--g-color-base-selection);
+}
+
+.relationship-node-title {
+  overflow-wrap: anywhere;
+}
+
+.relationship-edge {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--g-spacing-1);
+  min-block-size: var(--g-spacing-5);
+  margin-inline-start: var(--g-spacing-4);
+  color: var(--g-color-text-secondary);
+}
+
+.relationship-edge-line {
+  inline-size: 1px;
+  block-size: var(--g-spacing-4);
+  background: currentColor;
+}
+
+.relationship-edge-icon {
+  flex-shrink: 0;
+}
