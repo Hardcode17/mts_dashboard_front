@@ -1,4 +1,5 @@
 import type {OutageGroup, GroupReview, GroupDecisions} from './outageGroups.ts'
+import type {DeadlineRisk} from '../deadlineRisk.ts'
 import type {CardRevision} from '../incidentHistory.ts'
 import type {IncidentGroup} from '../entities/incident/model/api-types.ts'
 
@@ -32,6 +33,7 @@ export interface Incident {
   flags?: string[]
   dueAt?: number | null
   deadlineStatus?: {remainingSeconds: number; overdue: boolean; observedAt: number}
+  deadlineRisk?: DeadlineRisk
   site?: string
   specialists?: number
   workMinutes?: number

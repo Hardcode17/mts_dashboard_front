@@ -21,6 +21,7 @@ export type DeadlineState =
   | 'inactive'
 
 export interface IncidentDto {
+  deadlineRisk?: unknown
   id: IncidentNumber
   header: string
   description: string | null

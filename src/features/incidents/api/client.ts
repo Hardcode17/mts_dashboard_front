@@ -48,6 +48,7 @@ function mapIncident(summary: DashboardIncidentSummary, detail?: DashboardIncide
     deadline: summary.deadline,
     remainingSeconds: detail?.remainingSeconds ?? null,
     overdue: detail?.overdue ?? false,
+    deadlineRisk: detail?.deadlineRisk,
     groups: summary.groupMemberships.map(({group}) => group === 'coordinator' ? 'coordinators' : group),
   }
 }

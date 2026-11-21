@@ -695,6 +695,42 @@ test('INC overview keeps the overdue deadline and coordinator visible and reopen
 })
 
 
+test('deadline risk fits the current card and explains unknown and missing data', async t => {
+  const deadline = new Date(Date.now() + 3600000).toISOString()
+  const common = {
+    priorityId: 3, productName: 'МТС', stateEnum: 'Assigned',
+    assignedGroupName: 'КЦ ИТ Координаторы Массовых Инцидентов',
+    completionDate: null, submitDate: new Date(Date.now() - 3600000).toISOString(),
+  }
+  const reason = 'Недостаточно исторических данных'
+  const items = [
+    {...common, id: 'INC000000000083', header: 'С оценкой', deadline,
+      deadlineRisk: {risk: 'unknown', reasons: [{code: 'no_history', text: reason}]}},
+    {...common, id: 'INC000000000084', header: 'Без оценки', deadline},
+    {...common, id: 'INC000000000085', header: 'Без срока', deadline: null},
+  ]
+  const {open, root} = await stand(t, items)
+  const page = await open('case')
+  const panel = page.locator('.ops-assignment:visible')
+  const card = id => root + '/?dataset=case#incident/' + id
+  await page.goto(card(items[0].id))
+  for (const [width, theme] of [[1440, 'dark'], [390, 'light']]) {
+    await page.setViewportSize({width, height: 900})
+    await setTheme(page, theme)
+    await expect(panel.getByText('Риск неизвестен', {exact: true})).toBeVisible()
+    const summary = panel.getByText('Основания оценки (1)', {exact: true})
+    await summary.click()
+    await expect(panel.getByText(reason, {exact: true})).toBeVisible()
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    await summary.click()
+  }
+  await page.goto(card(items[1].id))
+  await expect(panel.getByText('Анализ недоступен', {exact: true})).toBeVisible()
+  await page.goto(card(items[2].id))
+  await expect(panel.getByText('Срок не указан', {exact: true})).toBeVisible()
+  await expect(panel.getByText('Прогноз нарушения срока', {exact: true})).toHaveCount(0)
+})
+
 test('overview provides a short action list and opens the full situation list on demand', async t => {
   const source = Array.from({length: 5}, (_, i) => ({
     ...fixture[0], id: 'INC9876000' + i, header: 'Ситуация ' + i, priorityId: 4,
