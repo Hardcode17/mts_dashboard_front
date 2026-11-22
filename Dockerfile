@@ -25,7 +25,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY mock/*.ts ./mock/
-COPY mock/fixtures/analysis.ts mock/fixtures/shift.ts ./mock/fixtures/
+COPY mock/fixtures/analysis.ts mock/fixtures/shift.ts mock/fixtures/stand-investigation.json ./mock/fixtures/
 COPY src/*.ts ./src/
 COPY src/desk/*.ts ./src/desk/
 COPY src/entities/coordinator/model/availability.ts ./src/entities/coordinator/model/
