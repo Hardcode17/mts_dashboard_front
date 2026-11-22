@@ -438,7 +438,8 @@ export function IncidentGroups({incidents, compact = false}: {incidents: Inciden
   const rows = useMemo(() => buildAttentionRows(desk, incidents), [desk, incidents])
   const [query, setQuery] = useState('')
   const selected = compact ? null : new URLSearchParams(location.hash.split('?')[1]).get('group')
-  const row = selected ? rows.find((r) => r.id === selected) : undefined
+  const memberId = selected?.startsWith('inc:') ? selected.slice(4) : undefined
+  const row = rows.find(r => r.id === selected) ?? (memberId ? rows.find(r => r.group.members.includes(memberId)) : undefined)
   const backRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (selected && !compact) backRef.current?.focus({preventScroll: true})
