@@ -1,5 +1,6 @@
 import {useMemo, useRef, useState} from 'react'
 import {usesRealBackend} from '../shared/api/mode'
+import {ShiftHandover} from '../features/shift-handover/ShiftHandover'
 import {NotificationSettings} from '../features/notification-settings/NotificationSettings'
 import {
   Button,
@@ -222,6 +223,7 @@ function HandoverDesk({incidents}: {incidents: Incident[]}) {
   const key = new URLSearchParams(location.hash.split('?')[1]).get('incident')
   const item = incidents.find(i => i.key === key)
   return <div className="desk-stack">
+    {usesRealBackend && <ShiftHandover incidents={incidents}/>}
     <Card className="mcc-glass incident-panel">
       <Text as="h2" variant="header-1">Сводка для передачи смены</Text>
       <IncidentPicker incidents={incidents} value={item?.key ?? ''} onUpdate={next => {location.hash = 'desk/handover?incident=' + encodeURIComponent(next)}}/>
