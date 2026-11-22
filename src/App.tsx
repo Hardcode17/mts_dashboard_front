@@ -131,7 +131,7 @@ function Workspace({theme,changeTheme,incidents,suspended}:ThemeProps & {inciden
   const selected=incidents.find(i=>i.key===key||i.id===key)
   const showDetails=selected&&isCardRoute(hash)
   const query=new URLSearchParams(hash.split('?')[1])
-  const evidenceReport=!usesRealBackend&&selected&&view==='evidence'?desk.work[selected.key]?.reports.find(r=>r.id===query.get('run')):undefined
+  const evidenceReport=selected&&view==='evidence'?desk.work[selected.key]?.reports.find(r=>r.id===query.get('run')):undefined
   const evidenceIndex=query.get('source')
   const evidence=evidenceIndex && /^\d+$/.test(evidenceIndex) ? evidenceReport?.analysis?.evidence[Number(evidenceIndex)] : undefined
   const analysisHref = selected && evidenceReport && '#investigation/'+selected.key+'?run='+encodeURIComponent(evidenceReport.id)+'&dataset='+desk.mode

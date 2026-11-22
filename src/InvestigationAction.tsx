@@ -20,7 +20,7 @@ export function InvestigationAction({
   const [running, setRunning] = useState(false)
   const [failed, setFailed] = useState(false)
   const latest = desk.work[incident.key]?.reports.find(isInvestigationReport)
-  if (usesRealBackend) {
+  if (usesRealBackend && !latest?.analysis) {
     return <Button view={view} size={size} href={investigationHref(incident.key, desk.mode)}>Открыть расследование</Button>
   }
   if (latest && !repeat) {
