@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto'
 import {DatabaseSync} from 'node:sqlite'
-import {mkdirSync, readFileSync, statSync} from 'node:fs'
+import {existsSync, mkdirSync, readFileSync, statSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {IncomingMessage, ServerResponse} from 'node:http'
 import {groupModelWorker} from './groupModel.ts'
@@ -16,7 +16,7 @@ import {applyCard, applySnapshot, createDesk, dispatchTasks, execute, items, loo
 import {shiftClockBase, withFixtureTimes} from './fixtures/shift.ts'
 import {itsmGateway, ItsmError, mergeConfirmation} from './itsm.ts'
 import {requireWorkspaceUser, workspaceAuthSettings} from './workspaceAuth.ts'
-import {type Desk, type Command, type Source} from '../src/desk/types.ts'
+import {emptyWork, type Desk, type Command, type Report, type Source} from '../src/desk/types.ts'
 
 const liveCommands = new Set<Command['type']>([
   'ack', 'available', 'accept', 'handoff', 'link', 'unlink', 'note', 'toggleNote', 'threshold',
@@ -37,6 +37,22 @@ export function mockService(
   auth = workspaceAuthSettings(),
   liveBackend?: string,
 ) {
+  const reportFile = resolve('mock/fixtures/stand-investigation.json')
+  const example: {incidentId: string; report: Report} | undefined = liveBackend && existsSync(reportFile)
+    ? JSON.parse(readFileSync(reportFile, 'utf8'))
+    : undefined
+
+  function view(desk: Desk): Desk {
+    const snapshot = workspaceView(desk)
+    if (!liveBackend) return snapshot
+    const liveView = {...snapshot, presets: {}}
+    if (!example || !desk.records[example.incidentId] || desk.records[example.incidentId].absent) return liveView
+    const work = snapshot.work[example.incidentId] ?? emptyWork()
+    return {...liveView, work: {...snapshot.work, [example.incidentId]: {
+      ...work, reports: [example.report, ...work.reports],
+    }}}
+  }
+
   const gateway = itsmGateway(external)
   mkdirSync(directory, {recursive: true})
   const db = new DatabaseSync(join(directory, liveBackend ? 'workspace-live.sqlite' : 'workspace.sqlite'))
@@ -248,7 +264,7 @@ export function mockService(
           now: Date.now(),
           desk: url.searchParams.get('since') === String(d.version) ? null : live && d.apiBeforeFirstSuccess
             ? {...createDesk('case', d.started), version: d.version, people: d.people, enabled: [], apiBeforeFirstSuccess: true, sourceError: d.sourceError}
-            : live ? {...workspaceView(d), presets: {}} : workspaceView(d),
+            : view(d),
         })
       }
       if (
@@ -325,7 +341,7 @@ export function mockService(
           pollFile()
         }
         return send(res, 200, {
-          desk: live ? {...workspaceView(current()), presets: {}} : workspaceView(current()),
+          desk: view(current()),
           ...(live && {person: profile.id}),
           version: current().version,
           now,

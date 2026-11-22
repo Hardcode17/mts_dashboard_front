@@ -308,7 +308,8 @@ function PaymentPath({incident}: {incident: Incident}) {
 }
 
 export function AgentInvestigation({incident, cardHref}: {incident: Incident; cardHref: string}) {
-  if (usesRealBackend) {
+  const {desk} = useWorkspace()
+  if (usesRealBackend && !desk.work[incident.key]?.reports.some(r => r.analysis)) {
     return (
       <section className="agent-run" aria-label="Разбор инцидента">
         <Link href={cardHref}>← Вернуться в карточку</Link>
@@ -325,10 +326,10 @@ export function AgentInvestigation({incident, cardHref}: {incident: Incident; ca
       </section>
     )
   }
-  return <StandInvestigation incident={incident} cardHref={cardHref}/>
+  return <InvestigationReport incident={incident} cardHref={cardHref}/>
 }
 
-function StandInvestigation({incident, cardHref}: {incident: Incident; cardHref: string}) {
+function InvestigationReport({incident, cardHref}: {incident: Incident; cardHref: string}) {
   const {desk} = useWorkspace()
   const work = desk.work[incident.key]
   const reports = work?.reports.filter(isInvestigationReport) ?? []
@@ -336,7 +337,9 @@ function StandInvestigation({incident, cardHref}: {incident: Incident; cardHref:
   const latest = reports[0]
   const saved = run === null ? latest : reports.find((r) => r.id === run)
   const analysis = saved?.analysis
-  const outOfDate = saved && saved.revision !== (incident.updatedAt ?? 0)
+  const outOfDate = saved && (usesRealBackend
+    ? (incident.updatedAt ?? 0) > saved.at
+    : saved.revision !== (incident.updatedAt ?? 0))
   const settingsChanged = saved && work?.diagnosticsAt && work.diagnosticsAt > saved.at
   const missingRun = run !== null && !saved
 
@@ -375,13 +378,13 @@ function StandInvestigation({incident, cardHref}: {incident: Incident; cardHref:
             {incident.id} · {incident.product}
           </Text>
           <Text as="h1" variant="header-2">
-            Разбор ИИ
+            {usesRealBackend ? saved?.title ?? 'Сохранённый разбор ИИ' : 'Разбор ИИ'}
           </Text>
           <Text as="p" variant="body-2">
             {incident.title}
           </Text>
         </div>
-        {!missingRun && (
+        {!usesRealBackend && !missingRun && (
           <InvestigationAction incident={incident} repeat size="m" view={saved ? 'outlined' : 'action'} />
         )}
       </header>
