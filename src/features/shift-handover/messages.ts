@@ -1,0 +1,26 @@
+export const handoverMessages = {
+  en: {
+    title: 'Shift handover', recipient: 'Incoming coordinator', summary: 'What the next shift needs to know',
+    send: 'Hand over shift', selectAll: 'Select all', selectionLimit: 'Select up to 1,000 tasks per handover.',
+    incoming: 'Incoming handovers', outgoing: 'Sent handovers', assignments: 'My queue tasks',
+    queue: 'Unclaimed tasks', take: 'Take ownership', context: 'Review context',
+    loading: 'Loading shift handovers…', empty: 'No work to hand over.', noBatches: 'No handovers yet.',
+    missingRecipients: 'No other active coordinator in your groups.',
+    waiting: 'Awaiting acceptance', claimed: 'Accepted', unavailable: 'Task no longer available',
+    deadline: 'Resolution deadline', noDeadline: 'Deadline not set', reviewHint: 'Review the next step with the resolving team before taking ownership.',
+    error: 'Could not complete the handover action.', conflict: 'The task changed. Refresh and review the current ownership.',
+    refresh: 'Refresh', sent: 'Handover sent.', taken: 'Task accepted.', from: 'From', to: 'To',
+  },
+  ru: {
+    title: 'Передача смены', recipient: 'Кому передать', summary: 'Что нужно знать следующей смене',
+    send: 'Передать смену', selectAll: 'Выбрать все', selectionLimit: 'За одну передачу можно выбрать до 1 000 задач.',
+    incoming: 'Входящие передачи', outgoing: 'Отправленные передачи', assignments: 'Мои задачи из очереди',
+    queue: 'Свободные задачи в очереди', take: 'Взять в работу', context: 'Посмотреть контекст',
+    loading: 'Загружаем передачи смены…', empty: 'Нет задач для передачи.', noBatches: 'Передач пока нет.',
+    missingRecipients: 'В твоих группах пока нет других активных координаторов.',
+    waiting: 'Ожидает взятия', claimed: 'Взято в работу', unavailable: 'Задача больше недоступна',
+    deadline: 'Срок решения', noDeadline: 'Срок не указан', reviewHint: 'Перед взятием сверяй следующий шаг и при необходимости уточняй детали у команды решения.',
+    error: 'Не удалось выполнить действие.', conflict: 'Задача изменилась. Обнови данные и проверь текущего владельца.',
+    refresh: 'Обновить', sent: 'Передача отправлена.', taken: 'Задача взята в работу.', from: 'От', to: 'Кому',
+  },
+}
