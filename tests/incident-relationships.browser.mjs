@@ -143,6 +143,11 @@ async function stand(t) {
     assert.deepEqual(errors, [])
   })
 
+  let releaseSlow = () => {}
+  const slowGate = new Promise((resolve) => {
+    releaseSlow = resolve
+  })
+
   async function open(id) {
     const context = await browser.newContext({
       viewport: {width: 1280, height: 900},
@@ -160,9 +165,7 @@ async function stand(t) {
       )
       if (relationshipMatch) {
         const id = decodeURIComponent(relationshipMatch[1])
-        if (id === 'INC-SLOW') {
-          await new Promise((resolve) => setTimeout(resolve, 700))
-        }
+        if (id === 'INC-SLOW') await slowGate
         if (id === 'INC-ERROR' && errorAttempts++ === 0) {
           await route.fulfill({
             status: 500,
@@ -212,57 +215,155 @@ async function stand(t) {
       await route.continue()
     })
     await page.goto(`${root}/incidents/${id}`)
-    await expect(page.getByRole('heading', {name: incidents[id].title})).toBeVisible()
+    await expect(page.getByRole('heading', {name: incidents[id].title, level: 2})).toBeVisible()
     return page
   }
 
-  return {open}
+  return {open, releaseSlow}
+}
+
+async function openRelationshipList(page) {
+  await page.getByText('Список связей').click()
+  await expect(page.locator('.relationship-list')).toBeVisible()
 }
 
 test('relationships load separately and a local error can be retried without hiding the incident card', async (t) => {
-  const {open} = await stand(t)
+  const {open, releaseSlow} = await stand(t)
   const slow = await open('INC-SLOW')
-  await expect(slow.getByRole('heading', {name: 'Медленный инцидент'})).toBeVisible()
+  await expect(slow.getByRole('heading', {name: 'Медленный инцидент', level: 2})).toBeVisible()
   await expect(slow.getByText('Загружаем связанные инциденты…')).toBeVisible()
-  await expect(slow.getByRole('link', {name: /INC-PARENT/})).toBeVisible()
+  releaseSlow()
+  await expect(
+    slow.locator('.relationship-node').filter({hasText: 'INC-PARENT'}),
+  ).toBeVisible()
 
   const broken = await open('INC-ERROR')
-  await expect(broken.getByRole('heading', {name: 'Инцидент с ошибкой связей'})).toBeVisible()
+  await expect(
+    broken.getByRole('heading', {name: 'Инцидент с ошибкой связей', level: 2}),
+  ).toBeVisible()
   await expect(broken.getByRole('alert')).toContainText('Сервис связей временно недоступен')
   await broken.getByRole('button', {name: 'Повторить'}).click()
-  await expect(broken.getByRole('link', {name: /INC-PARENT/})).toBeVisible()
+  await expect(
+    broken.locator('.relationship-node').filter({hasText: 'INC-PARENT'}),
+  ).toBeVisible()
 })
 
 test('a known unrelated incident shows the empty state', async (t) => {
   const {open} = await stand(t)
   const page = await open('INC-UNRELATED')
   await expect(page.getByText('Нет связанных инцидентов')).toBeVisible()
-  await expect(page.locator('.relationship-node_link')).toHaveCount(0)
+  await expect(page.locator('.relationship-node, .relationship-list-button')).toHaveCount(0)
 })
 
-test('the graph labels direction and selection, then keyboard navigation refocuses parent and siblings', async (t) => {
+test('the graph supports selection, keyboard navigation, details and zoom without losing the current incident', async (t) => {
   const {open} = await stand(t)
   const page = await open('INC-CHILD')
 
   await expect(page.getByRole('heading', {name: 'Связанные инциденты'})).toBeVisible()
-  await expect(page.getByText('родитель → дочерний')).toBeVisible()
-  await expect(page.getByText('Выбранный INC')).toBeVisible()
-  await expect(page.locator('.relationship-node_selected')).toHaveAttribute(
-    'aria-current',
-    'true',
-  )
+  await expect(page.locator('.relationship-board-label')).toContainText('Родитель')
+  await expect(page.locator('.relationship-board-label')).toContainText('Дочерний')
+  await expect(page.locator('.relationship-node')).toHaveCount(2)
+  await expect(
+    page.locator('.relationship-node[data-current="true"]'),
+  ).toContainText('INC-CHILD')
+  await expect(
+    page.locator('.relationship-node[data-current="true"]'),
+  ).toHaveAttribute('aria-pressed', 'true')
 
-  const parentLink = page.getByRole('link', {name: /INC-PARENT/})
+  const zoom = page.locator('.relationship-zoom')
+  const initialZoom = await zoom.textContent()
+  await page.getByRole('button', {name: 'Увеличить масштаб'}).click()
+  await expect.poll(async () => zoom.textContent()).not.toBe(initialZoom)
+  await page.getByRole('button', {name: 'Уменьшить масштаб'}).click()
+  await expect.poll(async () => zoom.textContent()).toBe(initialZoom)
+  await page.getByRole('button', {name: 'Увеличить масштаб'}).click()
+  await expect.poll(async () => zoom.textContent()).not.toBe(initialZoom)
+  await page.getByRole('button', {name: 'Показать весь граф'}).click()
+  await expect.poll(async () => zoom.textContent()).toBe(initialZoom)
+
+  const details = page.getByRole('complementary', {name: 'Подробности выбранного инцидента'})
+  const parentNode = page.locator('.relationship-node').filter({hasText: 'INC-PARENT'})
+  await expect(parentNode).toBeVisible()
+
+  await page.locator('.relationship-board').scrollIntoViewIfNeeded()
+  const viewport = page.viewportSize()
+  const boardBox = await page.locator('.relationship-board').boundingBox()
+  const beforePan = await parentNode.boundingBox()
+  assert(viewport && boardBox && beforePan)
+  const dragX = Math.min(boardBox.x + boardBox.width - 24, viewport.width - 24)
+  const dragY = boardBox.y + 28
+  await page.mouse.move(dragX, dragY)
+  await page.mouse.down()
+  await page.mouse.move(dragX - 36, dragY + 24, {steps: 5})
+  await page.mouse.up()
+  await expect.poll(async () => (await parentNode.boundingBox())?.x).not.toBe(beforePan.x)
+  await page.getByRole('button', {name: 'Показать весь граф'}).click()
+  await expect.poll(async () => zoom.textContent()).toBe(initialZoom)
+
+  await parentNode.click()
+
+  await expect(details).toContainText('Родительский инцидент')
+  await expect(details).toContainText('INC-PARENT')
+  await expect(
+    page.locator('.relationship-node[data-current="true"]'),
+  ).toContainText('INC-CHILD')
+  await expect(
+    page.locator('.relationship-node[data-current="true"]'),
+  ).toHaveAttribute('aria-pressed', 'false')
+  const parentLink = details.getByRole('link', {name: /Открыть инцидент INC-PARENT/})
   await expect(parentLink).toHaveAttribute('href', '/incidents/INC-PARENT')
-  await parentLink.focus()
-  await expect(parentLink).toBeFocused()
+
+  await openRelationshipList(page)
+  const childListItem = page
+    .locator('.relationship-list-button')
+    .filter({hasText: 'INC-CHILD'})
+  await childListItem.focus()
   await page.keyboard.press('Enter')
+  await expect(details).toContainText('Текущий инцидент')
+  await expect(details).toContainText('INC-CHILD')
+
+  const parentListItem = page
+    .locator('.relationship-list-button')
+    .filter({hasText: 'INC-PARENT'})
+  await parentListItem.focus()
+  await page.keyboard.press('Enter')
+  await details.getByRole('link', {name: /Открыть инцидент INC-PARENT/}).click()
 
   await page.waitForURL('**/incidents/INC-PARENT')
-  await expect(page.getByRole('heading', {name: 'Сбой оплаты в рознице'})).toBeVisible()
-  await expect(page.getByText('Выбранный INC')).toBeVisible()
-  await expect(page.getByRole('link', {name: /INC-CHILD/})).toBeVisible()
-  await expect(page.getByRole('link', {name: /INC-SIBLING/})).toBeVisible()
+  await expect(
+    page.getByRole('heading', {name: 'Сбой оплаты в рознице', level: 2}),
+  ).toBeVisible()
+  await expect(details).toContainText('Текущий инцидент')
+  await expect(details).toContainText('INC-PARENT')
+  await openRelationshipList(page)
+  await expect(
+    page.locator('.relationship-list-button').filter({hasText: 'INC-CHILD'}),
+  ).toBeVisible()
+  await expect(
+    page.locator('.relationship-list-button').filter({hasText: 'INC-SIBLING'}),
+  ).toBeVisible()
+})
+
+test('the accessible relationship list still selects nodes on a narrow screen at low zoom', async (t) => {
+  const {open} = await stand(t)
+  const page = await open('INC-PARENT')
+  await page.setViewportSize({width: 390, height: 900})
+  await page.getByRole('button', {name: 'Показать весь граф'}).click()
+  await expect(page.locator('.relationship-node')).toHaveCount(0)
+
+  await openRelationshipList(page)
+  const childListItem = page
+    .locator('.relationship-list-button')
+    .filter({hasText: 'INC-CHILD'})
+  await childListItem.focus()
+  await page.keyboard.press('Enter')
+
+  const details = page.getByRole('complementary', {name: 'Подробности выбранного инцидента'})
+  await expect(details).toContainText('Дочерний инцидент')
+  await expect(details).toContainText('INC-CHILD')
+  await expect(
+    page.locator('.relationship-list-button').filter({hasText: 'INC-SIBLING'}),
+  ).toBeVisible()
 })
 
 test('the dashboard hash detail shows the graph and keeps navigation on the canonical route', async (t) => {
@@ -303,20 +404,40 @@ test('the dashboard hash detail shows the graph and keeps navigation on the cano
   page.setDefaultTimeout(10000)
 
   await page.goto(`${root}/#incident/INC000021938167`)
-  await expect(page.getByRole('heading', {name: 'Проблема с Прокладка'})).toBeVisible()
+  await expect(
+    page.getByRole('heading', {name: 'Проблема с Прокладка', level: 1}),
+  ).toBeVisible()
   await expect(page.getByRole('heading', {name: 'Связанные инциденты'})).toBeVisible()
-  await expect(page.getByText('Выбранный INC')).toBeVisible()
+  await expect(page.locator('.relationship-list-button')).toHaveCount(2)
 
-  const parentLink = page.getByRole('link', {name: /INC000021940033/})
+  await openRelationshipList(page)
+  const parentListItem = page
+    .locator('.relationship-list-button')
+    .filter({hasText: 'INC000021940033'})
+  await parentListItem.focus()
+  await page.keyboard.press('Enter')
+
+  const details = page.getByRole('complementary', {name: 'Подробности выбранного инцидента'})
+  await expect(details).toContainText('Родительский инцидент')
+  await expect(details).toContainText('INC000021940033')
+  const parentLink = details.getByRole('link', {name: /Открыть инцидент INC000021940033/})
   await expect(parentLink).toHaveAttribute(
     'href',
     '/incidents/INC000021940033?source=case',
   )
-  await parentLink.focus()
-  await page.keyboard.press('Enter')
+  await parentLink.click()
 
   await page.waitForURL(/(?:\/incidents\/INC000021940033\?source=case|\/#incident\/INC000021940033)$/)
-  await expect(page.getByRole('heading', {name: 'Аномалия в Магнит'})).toBeVisible()
-  await expect(page.getByRole('link', {name: /INC000021938167/})).toBeVisible()
-  await expect(page.getByRole('link', {name: /INC000021940779/})).toBeVisible()
+  await expect(
+    page.getByRole('heading', {name: 'Аномалия в Магнит', level: 1}),
+  ).toBeVisible()
+  await expect(details).toContainText('Текущий инцидент')
+  await expect(details).toContainText('INC000021940033')
+  await openRelationshipList(page)
+  await expect(
+    page.locator('.relationship-list-button').filter({hasText: 'INC000021938167'}),
+  ).toBeVisible()
+  await expect(
+    page.locator('.relationship-list-button').filter({hasText: 'INC000021940779'}),
+  ).toBeVisible()
 })

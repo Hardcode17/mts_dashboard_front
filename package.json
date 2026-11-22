@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@gravity-ui/charts": "^2.1.0",
+    "@gravity-ui/graph": "1.13.1",
     "@gravity-ui/icons": "^2.23.1",
     "@gravity-ui/table": "^2.0.0",
     "@gravity-ui/uikit": "^8.1.0",
@@ -36,5 +37,11 @@
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6"
+  },
+  "overrides": {
+    "@gravity-ui/graph": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
