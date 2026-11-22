@@ -5,6 +5,7 @@ import type {DashboardIdentity} from '../../entities/incident/model/dashboard-co
 import {ApiError} from '../../shared/api/http'
 import {incidentsApi, setDashboardAccessToken} from '../incidents/api/client'
 import {authMessages} from './messages'
+import './DashboardAuth.css'
 
 const authority = import.meta.env.VITE_OIDC_AUTHORITY?.trim()
 const callbackPath = '/auth/callback'
@@ -93,14 +94,14 @@ export function DashboardAuth({children}: {children: ReactNode}) {
     </accessContext.Provider>
   }
 
-  return <main className="workspace">
-    <Card className="mcc-glass incident-panel">
-      <Text as="h1" variant="header-2">{copy.title}</Text>
+  return <main className="dashboard-auth">
+    <Card className="mcc-glass dashboard-auth__card">
+      <Text as="h1" variant="header-2" className="dashboard-auth__title">{copy.title}</Text>
       {!manager ? <Text role="alert">{copy.missingAuthority}</Text> : !session ? (
         <div role="status" aria-label={copy.loading}><Loader /></div>
       ) : <>
         {(session.failed || session.denied || error) && <Text role="alert">{session.denied ? copy.accessDenied : copy.failed}</Text>}
-        <Button view="action" onClick={() => {
+        <Button view="action" size="l" onClick={() => {
           setError(false)
           const {pathname, search, hash} = window.location
           void manager.signinRedirect({state: pathname + search + hash}).catch(() => setError(true))

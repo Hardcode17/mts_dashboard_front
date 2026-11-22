@@ -1,0 +1,22 @@
+.dashboard-auth {
+  box-sizing: border-box;
+  display: grid;
+  min-block-size: 100vh;
+  min-block-size: 100svh;
+  place-items: center;
+  padding: var(--g-spacing-4);
+}
+
+.dashboard-auth__card {
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  gap: var(--g-spacing-5);
+  inline-size: min(100%, 26rem);
+  padding: clamp(var(--g-spacing-5), 6vw, var(--g-spacing-8));
+  text-align: center;
+}
+
+.dashboard-auth__title {
+  margin: 0;
+}
