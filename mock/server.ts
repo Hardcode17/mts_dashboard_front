@@ -38,7 +38,7 @@ export function mockService(
   liveBackend?: string,
 ) {
   const reportFile = resolve('mock/fixtures/stand-investigation.json')
-  const example: {incidentId: string; report: Report} | undefined = liveBackend && existsSync(reportFile)
+  const example: {incidentId: string; report: Report} | null | undefined = liveBackend && existsSync(reportFile)
     ? JSON.parse(readFileSync(reportFile, 'utf8'))
     : undefined
 
