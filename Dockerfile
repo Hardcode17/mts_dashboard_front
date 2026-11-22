@@ -28,13 +28,16 @@ COPY mock/*.ts ./mock/
 COPY mock/fixtures/analysis.ts mock/fixtures/shift.ts ./mock/fixtures/
 COPY src/*.ts ./src/
 COPY src/desk/*.ts ./src/desk/
+COPY src/entities/coordinator/model/availability.ts ./src/entities/coordinator/model/
 COPY src/monitoring/summary.ts ./src/monitoring/
 COPY src/features/incidents/api/client.ts ./src/features/incidents/api/
 COPY src/features/incidents/model/toDesk.ts ./src/features/incidents/model/
+COPY src/features/shift-availability/messages.ts ./src/features/shift-availability/
 COPY src/shared/api/*.ts ./src/shared/api/
 RUN mkdir -p /var/lib/mcc && chown node:node /var/lib/mcc
 ENV MCC_STATE_DIR=/var/lib/mcc
 USER node
+RUN node --input-type=module -e "await import('./mock/server.ts')"
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
